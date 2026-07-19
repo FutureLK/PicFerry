@@ -19,9 +19,37 @@ import signal
 import datetime
 import time
 import mimetypes
+import configparser
 
 PORT = 13826
 IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
+
+# ─── Config ──────────────────────────────────────────────────────────────────
+
+CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd(),
+    'config.ini'
+)
+
+def load_config():
+    cfg = configparser.ConfigParser()
+    cfg.read(CONFIG_PATH, encoding='utf-8')
+    return {
+        'dev1ceA': cfg.get('Settings', 'dev1ceA', fallback=''),
+        'dev1ceB': cfg.get('Settings', 'dev1ceB', fallback=''),
+        'PixivUID': cfg.get('Settings', 'PixivUID', fallback=''),
+        'PHPSESSID': cfg.get('Settings', 'PHPSESSID', fallback=''),
+        'PixivL': cfg.get('Settings', 'PixivL', fallback=''),
+    }
+
+def save_config(data: dict):
+    keys = ['dev1ceA', 'dev1ceB', 'PixivUID', 'PHPSESSID', 'PixivL']
+    lines = ['[Settings]\n']
+    for k in keys:
+        v = data.get(k, '')
+        lines.append(f'{k} = {v}\n')
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+        f.writelines(lines)
 
 # ─── Console logging ─────────────────────────────────────────────────────────
 
@@ -333,6 +361,40 @@ let currentFiles = [];
 let scanDir = 'ab';  // 'ab' = B→A 正向, 'ba' = A→B 反向
 let loadedFilesA = [];
 let loadedFilesB = [];
+
+// ─── Config auto-fill & save ───────────────────────────────────
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config');
+    const cfg = await res.json();
+    if (cfg.dev1ceA) urlA.value = cfg.dev1ceA;
+    if (cfg.dev1ceB) urlB.value = cfg.dev1ceB;
+    if (cfg.PixivUID) document.getElementById('pixivUid').value = cfg.PixivUID;
+    if (cfg.PHPSESSID) document.getElementById('pixivPhpsessid').value = cfg.PHPSESSID;
+    if (cfg.PixivL) document.getElementById('pixivPath').value = cfg.PixivL;
+  } catch (e) {
+    // config 文件不存在或解析失败，静默忽略
+  }
+}
+
+async function saveConfig() {
+  const data = {
+    dev1ceA: urlA.value.trim(),
+    dev1ceB: urlB.value.trim(),
+    PixivUID: document.getElementById('pixivUid').value.trim(),
+    PHPSESSID: document.getElementById('pixivPhpsessid').value.trim(),
+    PixivL: document.getElementById('pixivPath').value.trim(),
+  };
+  try {
+    await fetch('/api/config/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch (e) {
+    // 保存失败静默忽略
+  }
+}
 
 const statsBar = document.getElementById('statsBar');
 const dirBtns = document.querySelectorAll('.dir-btn');
@@ -756,6 +818,16 @@ selectAll.addEventListener('change', function() {
   updateSyncBtn();
 });
 syncBtn.addEventListener('click', doSync);
+
+// ─── Config blur save ──────────────────────────────────────────
+urlA.addEventListener('blur', saveConfig);
+urlB.addEventListener('blur', saveConfig);
+document.getElementById('pixivUid').addEventListener('blur', saveConfig);
+document.getElementById('pixivPhpsessid').addEventListener('blur', saveConfig);
+document.getElementById('pixivPath').addEventListener('blur', saveConfig);
+
+// 加载配置文件
+loadConfig();
 </script>
 </body>
 </html>"""
@@ -1075,6 +1147,8 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             self._handle_image(params)
         elif parsed.path == '/api/log':
             self._handle_log(params)
+        elif parsed.path == '/api/config':
+            self._handle_config()
         else:
             self._send_error(404)
 
@@ -1090,6 +1164,8 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             self._handle_pixiv_bookmarks()
         elif parsed.path == '/api/log':
             self._handle_log(params)
+        elif parsed.path == '/api/config/save':
+            self._handle_config_save()
         else:
             self._send_error(404)
 
@@ -1270,6 +1346,16 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
         cat = params.get('cat', ['INFO'])[0]
         if msg:
             console_log(cat, msg)
+        self._send_json({'ok': True})
+
+    def _handle_config(self):
+        self._send_json(load_config())
+
+    def _handle_config_save(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+        data = json.loads(body)
+        save_config(data)
         self._send_json({'ok': True})
 
 # ─── Server ──────────────────────────────────────────────────────────────────

@@ -22,6 +22,28 @@ python server.py
 
 浏览器自动打开 `http://localhost:3000`
 
+> 程序启动时会自动读取同目录下的 `config.ini`，填入上次保存的值；修改输入框后按 Tab 移出即自动保存。
+
+### 配置文件（可选）
+
+在同目录下创建 `config.ini`，程序启动时自动加载并填入表单，离开输入框时自动保存。
+
+```ini
+[Settings]
+dev1ceA = 
+dev1ceB = 
+PixivUID = 
+PHPSESSID = 
+PixivL = 
+```
+
+字段说明:
+- `dev1ceA` — 设备 A 的 HTTP/FTP 链接
+- `dev1ceB` — 设备 B 的 HTTP/FTP 链接
+- `PixivUID` — Pixiv 用户 ID
+- `PHPSESSID` — Pixiv 登录凭证 (Cookie)
+- `PixivL` — 查重用的本地文件夹路径
+
 ## 操作说明
 
 1. 在手机文件管理器（MT 管理器等）上开启 FTP 或 HTTP 远程服务，或准备好本地文件夹路径
