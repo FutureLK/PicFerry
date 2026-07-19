@@ -22,6 +22,9 @@ Thumbs.db
 # logs
 *.log
 
+# config
+Python project/config.ini
+
 # opencode
 .omo/
 .codegraph/
