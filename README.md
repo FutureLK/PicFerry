@@ -24,7 +24,7 @@
 | 目录 | 语言 | 体积 | 说明 |
 |---|---|---|---|
 | [Python project](Python%20project/) | Python 3 | **6.7 MB** | 当前推荐版本，零外部依赖，内嵌 Web UI |
-| [Nodejs project](Nodejs%20project/) | Node.js | **38 MB** | 旧版存档，不再维护 |
+| [Nodejs project](archived/Nodejs%20project/) | Node.js | **38 MB** | 旧版存档，不再维护 |
 
 ## 快速开始
 

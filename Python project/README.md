@@ -8,7 +8,7 @@
 
 ### 方式一：EXE（推荐）
 
-`dist/图片同步.exe` 双击运行，浏览器自动打开。
+从 [Releases 页面](https://github.com/FutureLK/Pixiv-IMG-local-duplication/releases) 下载最新版的 `图片同步.exe`，双击运行，浏览器自动打开。
 
 > 首次运行 Windows 可能提示安全警告，点击「更多信息」→「仍要运行」即可。
 
