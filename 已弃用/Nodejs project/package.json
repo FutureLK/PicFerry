@@ -1,0 +1,23 @@
+{
+  "name": "gallery-sync-tool",
+  "version": "1.0.0",
+  "description": "图库同步工具 - 通过局域网 HTTP 在两台手机间同步图库",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "pkg . --output dist/gallery-sync.exe"
+  },
+  "bin": "server.js",
+  "pkg": {
+    "targets": [
+      "node18-win-x64"
+    ]
+  },
+  "dependencies": {
+    "basic-ftp": "^6.0.1",
+    "express": "^4.18.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.0"
+  }
+}
