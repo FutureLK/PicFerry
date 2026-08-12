@@ -1122,7 +1122,6 @@ async function pollPixivJob() {
 function renderPixivResult(summary, matched) {
   document.getElementById('pixivTotal').textContent = summary ? (summary.total_bookmarks ?? 0) : 0;
   document.getElementById('pixivLocalCount').textContent = summary ? (summary.local_count ?? 0) : 0;
-  document.getElementById('pixivMatched').textContent = summary ? (summary.matched_count ?? 0) : 0;
 
   const tbody = document.getElementById('pixivFileList');
   const pixivPath = document.getElementById('pixivPath').value.trim();
@@ -1546,7 +1545,7 @@ def _read_remote_file(url, filename):
 #   描述: 轮询 Job 状态（不含 result 数组, 轻量）
 #   成功响应: { "status": "idle|fetching|scanning|matching|done|stopped|error",
 #               "progress": {"phase","fetched","total"}, "error": string|null,
-#               "summary": {"total_bookmarks","local_count","matched_count"}|null }
+#               "summary": {"total_bookmarks","local_count","missing_works","missing_pages"}|null }
 #
 # [GET] /api/pixiv/job/result
 #   描述: 取终态结果（仅 done 时有数据）
@@ -1752,7 +1751,7 @@ pixiv_job = {
     'stop': threading.Event(),
     'lock': threading.Lock(),
     'progress': {'phase': '', 'fetched': 0, 'total': 0},
-    'summary': None,             # done 时: {total_bookmarks, local_count, matched_count}
+    'summary': None,             # done 时: {total_bookmarks, local_count, missing_works, missing_pages}
     'error': None,
     'result': None,              # done 时: matched 数组
 }
@@ -1808,34 +1807,51 @@ def run_pixiv_job(uid, phpsessid, path, limit=0, fetch_fn=fetch_all_pixiv_bookma
             set_state(status='stopped')
             return
 
-        # ── matching（分p级: 按 pageCount 存在性匹配）──
+        # ── matching（反转: 以收藏作品为粒度, 统计本地缺失分p）──
         if pixiv_job['stop'].is_set():
             set_state(status='stopped')
             return
         set_state(status='matching', progress={'phase': 'matching', 'fetched': 0, 'total': len(local_files)})
-        matched = []
+        saved = {}
         for f in local_files:
             if pixiv_job['stop'].is_set():
                 set_state(status='stopped')
                 return
             illust_id, page = extract_illust_page(f['name'])
-            if illust_id and is_page_covered(illust_id, page, bookmarks):
-                matched.append({
-                    'name': f['name'],
-                    'size': f.get('size', 0),
-                    'illust_id': illust_id,
-                    'page': page,
-                    'pageCount': bookmarks[illust_id],
-                })
-            set_state(progress={'phase': 'matching', 'fetched': len(matched), 'total': len(local_files)})
+            if not illust_id:
+                continue
+            page_count = bookmarks.get(illust_id)
+            if page_count is None:
+                continue
+            if is_page_covered(illust_id, page, bookmarks):   # 匹配判定不变 (page < pageCount)
+                saved.setdefault(illust_id, set()).add(page)
+            set_state(progress={'phase': 'matching', 'fetched': len(saved), 'total': len(bookmarks)})
 
-        matched = matched[:max_rows]
+        # 缺失作品聚合（默认 illust_id 数值升序; 排序方式可调整）
+        missing = []
+        for wid, page_count in sorted(bookmarks.items(), key=lambda kv: int(kv[0])):
+            if pixiv_job['stop'].is_set():
+                set_state(status='stopped')
+                return
+            x = len(saved.get(wid, set()))
+            if x < page_count:
+                missing.append({
+                    'illust_id': wid,
+                    'pageCount': page_count,
+                    'saved_pages': x,
+                    'missing_pages': page_count - x,
+                    'range': 'p0~p' + str(page_count - 1),
+                })
+        missing_works_total = len(missing)          # 截断前统计
+        missing_pages_total = sum(m['missing_pages'] for m in missing)
+        missing = missing[:max_rows]                # max_rows 按作品数截断
         set_state(status='done',
-                  progress={'phase': 'done', 'fetched': len(matched), 'total': len(matched)},
+                  progress={'phase': 'done', 'fetched': len(missing), 'total': len(missing)},
                   summary={'total_bookmarks': len(bookmarks),
                            'local_count': len(local_files),
-                           'matched_count': len(matched)},
-                  result=matched)
+                           'missing_works': missing_works_total,
+                           'missing_pages': missing_pages_total},
+                  result=missing)
     except urllib.error.HTTPError as e:
         if e.code == 403:
             msg = 'Pixiv 认证失败，请检查 PHPSESSID 是否有效或已过期'
