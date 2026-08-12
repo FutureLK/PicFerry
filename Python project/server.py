@@ -857,15 +857,6 @@ function loadThumbnails() {
   });
 }
 
-function observeThumbs(containerEl) {
-  // 供 Pixiv 结果表等动态渲染后调用: 仅观察容器内未加载的缩略图
-  if (!containerEl) return;
-  containerEl.querySelectorAll('.thumb').forEach(img => {
-    if (!img.dataset.src) return;
-    thumbObserver.observe(img);
-  });
-}
-
 // ─── Preview hover ─────────────────────────────────────────────────────
 
 let previewTimer = null;
