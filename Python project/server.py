@@ -749,6 +749,7 @@ async function doScan() {
     }
   } catch (e) {
     setStatus('扫描出错: ' + e.message, 'error');
+    showProgress(false);
   }
   scanBtn.disabled = false;
 }
