@@ -32,3 +32,6 @@ Python project/blacklist.csv
 
 # playwright mcp artifacts
 .playwright-mcp/
+
+# archived (local only)
+archived/
