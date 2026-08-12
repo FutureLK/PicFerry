@@ -1,4 +1,4 @@
-# 图片同步 - 多版本
+# 图片同步
 
 局域网文件比对与传输工具。支持 HTTP/FTP 连接两台手机，扫描去重后一键同步。
 
@@ -24,13 +24,6 @@
 | 日志文件 | 同目录 `sync.log`，防止终端输出丢失 |
 | 图片代理 | `/api/image` 转发远程图片供浏览器直接展示 |
 | 单文件打包 | PyInstaller → 6.7 MB，零依赖 |
-
-## 版本
-
-| 目录 | 语言 | 体积 | 说明 |
-|---|---|---|---|
-| [Python project](Python%20project/) | Python 3 | **6.7 MB** | 当前推荐版本，零外部依赖，内嵌 Web UI |
-| [Nodejs project](archived/Nodejs%20project/) | Node.js | **38 MB** | 旧版存档，不再维护 |
 
 ## 快速开始
 
