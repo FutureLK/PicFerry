@@ -24,6 +24,7 @@ Thumbs.db
 
 # config
 Python project/config.ini
+Python project/blacklist.csv
 
 # opencode
 .omo/

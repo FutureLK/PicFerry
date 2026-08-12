@@ -20,34 +20,71 @@ import datetime
 import time
 import mimetypes
 import configparser
+import itertools
 
 PORT = 13826
 IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd(),
-    'config.ini'
-)
+# 注意: 必须在【模块级】捕获脚本目录 —— 函数体内 dir() 只返回局部作用域,
+# 看不到模块级 __file__, 因此不能在 runtime_dir() 内部判断 '__file__' in dir()。
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+
+def runtime_dir():
+    """EXE 模式下返回 EXE 所在目录, 源码模式返回 server.py 所在目录"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return _SCRIPT_DIR
+
+CONFIG_PATH = os.path.join(runtime_dir(), 'config.ini')
+
+# 新设置键: 默认值与范围 (key: (default, lo, hi, type))
+_CONFIG_KEYS = {
+    'thumbnailSize':  (48,   16,    128,    'int'),    # px
+    'previewDelay':   (500,  100,   2000,   'int'),    # ms
+    'pixivInterval':  (0.8,  0.1,   10,     'float'),  # s
+    'pixivLimit':     (0,    0,     100000, 'int'),    # 0=全部
+    'maxRows':        (1000, 10,    5000,   'int'),    # 行数上限
+}
+
+def _parse_config_value(key, raw):
+    """解析配置值: 空串/非数字回落默认值, 越界钳制; 返回规范类型"""
+    default, lo, hi, vtype = _CONFIG_KEYS[key]
+    try:
+        if vtype == 'float':
+            val = float(str(raw).strip())
+        else:
+            val = int(float(str(raw).strip()))
+        return max(lo, min(hi, val))
+    except (TypeError, ValueError):
+        return default
 
 def load_config():
     cfg = configparser.ConfigParser()
     cfg.read(CONFIG_PATH, encoding='utf-8')
-    return {
+    conf = {
         'dev1ceA': cfg.get('Settings', 'dev1ceA', fallback=''),
         'dev1ceB': cfg.get('Settings', 'dev1ceB', fallback=''),
         'PixivUID': cfg.get('Settings', 'PixivUID', fallback=''),
         'PHPSESSID': cfg.get('Settings', 'PHPSESSID', fallback=''),
         'PixivL': cfg.get('Settings', 'PixivL', fallback=''),
     }
+    for key in _CONFIG_KEYS:
+        conf[key] = _parse_config_value(key, cfg.get('Settings', key, fallback=''))
+    return conf
 
 def save_config(data: dict):
-    keys = ['dev1ceA', 'dev1ceB', 'PixivUID', 'PHPSESSID', 'PixivL']
+    keys = ['dev1ceA', 'dev1ceB', 'PixivUID', 'PHPSESSID', 'PixivL'] + list(_CONFIG_KEYS.keys())
     lines = ['[Settings]\n']
     for k in keys:
-        v = data.get(k, '')
-        lines.append(f'{k} = {v}\n')
+        if k in _CONFIG_KEYS:
+            default, _, _, _ = _CONFIG_KEYS[k]
+            v = _parse_config_value(k, data.get(k, default))
+            lines.append(f'{k} = {v}\n')
+        else:
+            v = data.get(k, '')
+            lines.append(f'{k} = {v}\n')
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         f.writelines(lines)
 
@@ -62,6 +99,15 @@ LOG_COLORS = {
     'ERROR': '\033[91m',   # red
 }
 RESET = '\033[0m'
+
+# ─── 内存日志环形缓冲（供网页日志面板轮询）─────────────────────────────────
+import collections
+import threading
+
+LOG_BUFFER = collections.deque(maxlen=500)
+LOG_SEQ = itertools.count(1)   # 单调 id; 进程存活期内不回退, 清空不重置
+LOG_LAST_ID = 0                # 已发出的最大 id（itertools.count 不可回读, 单独维护）
+LOG_LOCK = threading.Lock()
 
 # 检测终端是否支持 ANSI 颜色（Windows 旧终端可能不支持）
 _USE_COLOR = True
@@ -81,7 +127,7 @@ def console_log(category, message):
 
     # 写日志文件（EXE 所在目录）
     try:
-        log_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
+        log_dir = runtime_dir()
         with open(os.path.join(log_dir, 'sync.log'), 'a', encoding='utf-8') as f:
             f.write(f'{line}\n')
     except:
@@ -95,6 +141,16 @@ def console_log(category, message):
         else:
             sys.stderr.write(f' {line}\n')
         sys.stderr.flush()
+    except:
+        pass
+
+    # 写内存环形缓冲（供网页日志面板增量轮询）; 存原始分类与消息, 不含 ANSI
+    try:
+        global LOG_LAST_ID
+        log_id = next(LOG_SEQ)
+        with LOG_LOCK:
+            LOG_LAST_ID = log_id
+            LOG_BUFFER.append((log_id, ts, category, message))
     except:
         pass
 
@@ -1048,18 +1104,103 @@ PIXIV_BOOKMARK_URL = 'https://www.pixiv.net/ajax/user/{uid}/illusts/bookmarks'
 PIXIV_REFERER = 'https://www.pixiv.net/'
 PIXIV_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
-def fetch_all_pixiv_bookmark_ids(uid, phpsessid):
-    """Fetch all bookmark illust IDs (public + private) from Pixiv."""
-    all_ids = set()
+# ─── Pixiv 查重黑名单 (blacklist.csv) ────────────────────────────────────────
+# 格式: 表头 "illust_id" + 每行一个作品 ID。表头行预留扩展列（如 tag/user_id）空间。
+BLACKLIST_PATH = os.path.join(runtime_dir(), 'blacklist.csv')
+BLACKLIST_LOCK = threading.Lock()
+
+
+def load_blacklist():
+    """读黑名单集合; 文件缺失时【创建】含表头 'illust_id' 的空文件并返回空 set。
+    文件创建是 load 的职责（GET /api/blacklist 与 Job 启动都会触发）。"""
+    with BLACKLIST_LOCK:
+        ids = set()
+        try:
+            with open(BLACKLIST_PATH, encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line == 'illust_id':
+                        continue
+                    ids.add(line)
+        except FileNotFoundError:
+            try:
+                with open(BLACKLIST_PATH, 'w', encoding='utf-8') as f:
+                    f.write('illust_id\n')
+            except OSError:
+                pass
+        except OSError:
+            pass
+        return ids
+
+
+def save_blacklist(ids):
+    """原子写: 临时文件 + os.replace, 避免并发读看到半写文件"""
+    with BLACKLIST_LOCK:
+        tmp = BLACKLIST_PATH + '.tmp'
+        try:
+            with open(tmp, 'w', encoding='utf-8') as f:
+                f.write('illust_id\n')
+                for i in sorted(ids):
+                    f.write(i + '\n')
+            os.replace(tmp, BLACKLIST_PATH)
+        except OSError:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+def normalize_illust_id(raw):
+    """输入可为纯数字 '123' 或作品链接 'https://www.pixiv.net/artworks/123' → 返回 '123';
+    无法提取时返回 None。"""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    m = re.search(r'/artworks/(\d+)', s)
+    if m:
+        return m.group(1)
+    if s.isdigit():
+        return s
+    return None
+
+
+def blacklist_snapshot():
+    """返回当前黑名单集合的副本（Job 启动时取快照, 运行中编辑不影响本次扫描）"""
+    return set(load_blacklist())
+
+def fetch_all_pixiv_bookmark_ids(uid, phpsessid, limit=0, stop_event=None, blacklist=None, interval=0.8):
+    """拉取全部收藏 (public + private), 返回 {str(id): int(pageCount)}。
+
+    - limit: 0=全部; 否则累计【非黑名单】ID 数达到 limit 即停（show 流先取, hide 流补足）
+    - stop_event: 每页请求后检查, 已置位则提前返回已收集部分
+    - blacklist: 拉取循环内跳过并累计计数, 不计入 limit 预算
+    - interval: 请求间隔（秒, 默认 0.8）
+    """
+    bookmarks = {}
+    blacklist = blacklist or set()
     request_count = 0
+    skipped_total = 0
+    stream_totals = {}   # visibility -> 该流 total（首页返回后可知）
+
+    def known_total():
+        return sum(stream_totals.values())
+
+    def update_progress():
+        denom = min(limit, known_total()) if limit > 0 else known_total()
+        with pixiv_job['lock']:
+            pixiv_job['progress'] = {'phase': 'fetching',
+                                     'fetched': len(bookmarks), 'total': denom or 0}
 
     for visibility in ('show', 'hide'):
         offset = 0
-        limit = 100
+        page_size = 100
 
         while True:
+            if stop_event is not None and stop_event.is_set():
+                return bookmarks
+
             params = urllib.parse.urlencode({
-                'tag': '', 'offset': offset, 'limit': limit, 'rest': visibility
+                'tag': '', 'offset': offset, 'limit': page_size, 'rest': visibility
             })
             full_url = PIXIV_BOOKMARK_URL.format(uid=uid) + '?' + params
 
@@ -1075,31 +1216,190 @@ def fetch_all_pixiv_bookmark_ids(uid, phpsessid):
                 raise Exception(f'Pixiv API error: {data.get("body", "Unknown")}')
 
             works = data.get('body', {}).get('works', [])
+            stream_total = data.get('body', {}).get('total', 0)
+            stream_totals[visibility] = stream_total
             if not works:
                 break
 
+            # 页内批量: 提取 id+pageCount, 剔除黑名单（filter_blacklisted 纯函数在此共用）
+            batch = {}
             for work in works:
-                all_ids.add(str(work.get('id', '')))
+                wid = str(work.get('id', ''))
+                if wid:
+                    batch[wid] = int(work.get('pageCount') or 1)
+            before = len(batch)
+            batch = filter_blacklisted(batch, blacklist)
+            skipped_total += before - len(batch)
 
-            total = data.get('body', {}).get('total', 0)
+            for wid, page_count in batch.items():
+                if wid not in bookmarks:
+                    bookmarks[wid] = page_count
+
             request_count += 1
-            console_log('SCAN', f'Pixiv({visibility}): {len(all_ids)}/{total} 请求{request_count}次')
+            skip_note = f' 黑名单跳过{skipped_total}' if skipped_total else ''
+            console_log('SCAN', f'Pixiv({visibility}): {len(bookmarks)}/{stream_total} 请求{request_count}次{skip_note}')
+            update_progress()
 
-            offset += limit
-            if offset >= total:
+            # limit 预算: 非黑名单累计数达标即停
+            if limit and limit > 0 and len(bookmarks) >= limit:
+                return bookmarks
+
+            offset += page_size
+            if offset >= stream_total:
                 break
 
-            time.sleep(0.8)  # rate limit
+            time.sleep(max(0.1, interval))  # rate limit (可配置)
 
-    return sorted(all_ids)
+    return bookmarks
 
 
-def extract_illust_id(filename):
-    """Extract Pixiv illust ID from filename like '114514_p0.jpg'."""
-    m = re.match(r'^(\d+)_p\d+', filename)
+def is_page_covered(illust_id, page, bookmarks):
+    """分p存在性匹配: 本地文件 illust_id_pN 仅当书签 pageCount > N 判定已收藏 (分页 0-indexed)"""
+    page_count = bookmarks.get(illust_id)
+    if page_count is None:
+        return False
+    return page < page_count
+
+
+def filter_blacklisted(bookmarks, blacklist):
+    """返回剔除黑名单 ID 后的 {id: pageCount} 副本（fetch 循环与单元测试共用）"""
+    return {i: c for i, c in bookmarks.items() if i not in blacklist}
+
+
+def extract_illust_page(filename):
+    """返回 (illust_id, page); 无 _pN 后缀的文件按 page=0。按 basename 匹配, 支持子目录相对路径。"""
+    base = os.path.basename(filename)
+    m = re.match(r'^(\d+)_p(\d+)', base)
     if m:
-        return m.group(1)
-    return None
+        return m.group(1), int(m.group(2))
+    m2 = re.match(r'^(\d+)', base)
+    if m2:
+        return m2.group(1), 0
+    return None, None
+
+
+# ─── Pixiv 后台 Job 引擎（单槽: 可终止/限量/进度）─────────────────────────────
+
+pixiv_job = {
+    'status': 'idle',            # idle|fetching|scanning|matching|done|stopped|error
+    'thread': None,
+    'stop': threading.Event(),
+    'lock': threading.Lock(),
+    'progress': {'phase': '', 'fetched': 0, 'total': 0},
+    'summary': None,             # done 时: {total_bookmarks, local_count, matched_count}
+    'error': None,
+    'result': None,              # done 时: matched 数组
+}
+
+
+def _scan_local_files(path):
+    """扫描本地目录/FTP/HTTP 源, 返回 [{name, size}]（保持原 _handle_pixiv_bookmarks 的扫描方式）"""
+    if is_local_path(path):
+        return local_list(path)
+    if is_ftp(path):
+        entries = ftp_list(path)
+        return [e for e in entries
+                if os.path.splitext(e['name'])[1].lower() in IMAGE_EXTS]
+    body_text, status = http_fetch(path)
+    return parse_html_listing(body_text)
+
+
+def run_pixiv_job(uid, phpsessid, path, limit=0, fetch_fn=fetch_all_pixiv_bookmark_ids, local_scan_fn=None):
+    """由 job 线程调用（也可同步调用做单元测试）:
+    状态机 fetching→scanning→matching→done / stopped / error。
+    关键时序约束: fetch_fn 返回后【立即先检查 stop】再处理结果 —— 顺序不可颠倒;
+    阶段切换点 (fetching→scanning→matching) 处【先检查 stop 再进入昂贵阶段】(如本地扫描)。"""
+    conf = load_config()
+    interval = conf.get('pixivInterval', 0.8)
+    max_rows = conf.get('maxRows', 1000)
+
+    # 黑名单快照: 启动时取一次, 运行中的黑名单编辑不影响本次扫描
+    blacklist = blacklist_snapshot()
+
+    def set_state(**updates):
+        with pixiv_job['lock']:
+            for k, v in updates.items():
+                pixiv_job[k] = v
+
+    try:
+        # ── fetching ──
+        set_state(status='fetching', error=None, summary=None, result=None,
+                  progress={'phase': 'fetching', 'fetched': 0, 'total': 0})
+        bookmarks = fetch_fn(uid, phpsessid, limit, pixiv_job['stop'], blacklist, interval)
+        if pixiv_job['stop'].is_set():          # 先查 stop, 再处理结果 —— 顺序不可颠倒
+            set_state(status='stopped')
+            return
+        total_fetch = len(bookmarks) if limit == 0 else min(limit, len(bookmarks))
+        set_state(progress={'phase': 'fetching', 'fetched': len(bookmarks), 'total': total_fetch})
+
+        # ── scanning ──
+        if pixiv_job['stop'].is_set():
+            set_state(status='stopped')
+            return
+        set_state(status='scanning', progress={'phase': 'scanning', 'fetched': 0, 'total': 0})
+        local_files = local_scan_fn(path) if local_scan_fn else _scan_local_files(path)
+        if pixiv_job['stop'].is_set():
+            set_state(status='stopped')
+            return
+
+        # ── matching（分p级: 按 pageCount 存在性匹配）──
+        if pixiv_job['stop'].is_set():
+            set_state(status='stopped')
+            return
+        set_state(status='matching', progress={'phase': 'matching', 'fetched': 0, 'total': len(local_files)})
+        matched = []
+        for f in local_files:
+            if pixiv_job['stop'].is_set():
+                set_state(status='stopped')
+                return
+            illust_id, page = extract_illust_page(f['name'])
+            if illust_id and is_page_covered(illust_id, page, bookmarks):
+                matched.append({
+                    'name': f['name'],
+                    'size': f.get('size', 0),
+                    'illust_id': illust_id,
+                    'page': page,
+                    'pageCount': bookmarks[illust_id],
+                })
+            set_state(progress={'phase': 'matching', 'fetched': len(matched), 'total': len(local_files)})
+
+        matched = matched[:max_rows]
+        set_state(status='done',
+                  progress={'phase': 'done', 'fetched': len(matched), 'total': len(matched)},
+                  summary={'total_bookmarks': len(bookmarks),
+                           'local_count': len(local_files),
+                           'matched_count': len(matched)},
+                  result=matched)
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            msg = 'Pixiv 认证失败，请检查 PHPSESSID 是否有效或已过期'
+        elif e.code == 404:
+            msg = 'Pixiv 用户不存在，请检查 UID'
+        else:
+            msg = f'HTTP {e.code}'
+        console_log('ERROR', f'Pixiv 查重失败: {msg}')
+        set_state(status='error', error=msg)
+    except Exception as e:
+        console_log('ERROR', f'Pixiv 查重失败: {e}')
+        set_state(status='error', error=str(e))
+
+
+def _start_pixiv_job(uid, phpsessid, path, limit=0):
+    """原子 check-and-set 启动单槽任务; 返回 (ok, message)"""
+    with pixiv_job['lock']:
+        if pixiv_job['status'] not in ('idle', 'done', 'stopped', 'error') or (
+                pixiv_job['thread'] and pixiv_job['thread'].is_alive()):
+            return False, '已有任务在运行'
+        pixiv_job['stop'].clear()      # 必须清除遗留 stop, 否则新任务在首个检查点立即停止
+        pixiv_job['status'] = 'fetching'
+        pixiv_job['progress'] = {'phase': 'fetching', 'fetched': 0, 'total': 0}
+        pixiv_job['summary'] = None
+        pixiv_job['error'] = None
+        pixiv_job['result'] = None
+        t = threading.Thread(target=run_pixiv_job, args=(uid, phpsessid, path, limit), daemon=True)
+        pixiv_job['thread'] = t
+        t.start()
+    return True, 'fetching'
 
 
 class SyncHandler(http.server.BaseHTTPRequestHandler):
@@ -1147,6 +1447,14 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             self._handle_image(params)
         elif parsed.path == '/api/log':
             self._handle_log(params)
+        elif parsed.path == '/api/logs':
+            self._handle_logs(params)
+        elif parsed.path == '/api/pixiv/job':
+            self._handle_pixiv_job()
+        elif parsed.path == '/api/pixiv/job/result':
+            self._handle_pixiv_job_result()
+        elif parsed.path == '/api/blacklist':
+            self._handle_blacklist()
         elif parsed.path == '/api/config':
             self._handle_config()
         else:
@@ -1162,8 +1470,18 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             self._handle_copy(params)
         elif parsed.path == '/api/pixiv/bookmarks':
             self._handle_pixiv_bookmarks()
+        elif parsed.path == '/api/pixiv/bookmarks/stop':
+            self._handle_pixiv_stop()
+        elif parsed.path == '/api/blacklist/add':
+            self._handle_blacklist_add()
+        elif parsed.path == '/api/blacklist/remove':
+            self._handle_blacklist_remove()
+        elif parsed.path == '/api/blacklist/clear':
+            self._handle_blacklist_clear()
         elif parsed.path == '/api/log':
             self._handle_log(params)
+        elif parsed.path == '/api/logs/clear':
+            self._handle_logs_clear()
         elif parsed.path == '/api/config/save':
             self._handle_config_save()
         else:
@@ -1244,6 +1562,8 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({'success': False, 'filename': filename, 'error': str(e)})
 
     def _handle_pixiv_bookmarks(self):
+        """POST /api/pixiv/bookmarks: 同步校验 → 后台启动 Job → 立即返回。
+        原同步实现已迁移到 run_pixiv_job（fetching→scanning→matching→done）。"""
         try:
             content_length = int(self.headers.get('Content-Length', 0))
             if content_length == 0:
@@ -1267,55 +1587,90 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             return
 
         try:
-            # 1. Fetch bookmarks
-            console_log('SCAN', f'Pixiv: 开始拉取收藏 (UID={uid})')
-            illust_ids = fetch_all_pixiv_bookmark_ids(uid, phpsessid)
-            console_log('DONE', f'Pixiv: 拉取完成, 共 {len(illust_ids)} 个收藏')
+            limit = int(req_data.get('limit', load_config().get('pixivLimit', 0)))
+        except (TypeError, ValueError):
+            limit = load_config().get('pixivLimit', 0)
 
-            # 2. Scan local path
-            console_log('SCAN', f'Pixiv: 扫描本地路径 {local_path}')
-            local_files = []
-            if is_local_path(local_path):
-                local_files = local_list(local_path)
-            elif is_ftp(local_path):
-                entries = ftp_list(local_path)
-                local_files = [e for e in entries
-                               if os.path.splitext(e['name'])[1].lower() in IMAGE_EXTS]
-            else:
-                body_text, status = http_fetch(local_path)
-                entries = parse_html_listing(body_text)
-                local_files = entries
+        ok, msg = _start_pixiv_job(uid, phpsessid, local_path, limit)
+        if not ok:
+            self._send_json({'error': msg})
+            return
+        console_log('SCAN', f'Pixiv: 开始拉取收藏 (UID={uid}, limit={limit})')
+        self._send_json({'ok': True, 'status': 'fetching'})
 
-            # 3. Match
-            matched = []
-            for f in local_files:
-                illust_id = extract_illust_id(f['name'])
-                if illust_id and illust_id in illust_ids:
-                    matched.append({
-                        'name': f['name'],
-                        'size': f.get('size', 0),
-                        'illust_id': illust_id
-                    })
+    def _handle_pixiv_stop(self):
+        """POST /api/pixiv/bookmarks/stop: 置 stop 事件, Job 在下个检查点停止"""
+        pixiv_job['stop'].set()
+        self._send_json({'ok': True})
 
-            console_log('DONE', f'Pixiv: 本地 {len(local_files)} 文件, 匹配 {len(matched)} 个')
+    def _handle_pixiv_job(self):
+        """GET /api/pixiv/job: 轻量状态轮询（不含 result 数组）"""
+        with pixiv_job['lock']:
+            status = pixiv_job['status']
+            progress = dict(pixiv_job['progress'])
+            error = pixiv_job['error']
+            summary = pixiv_job['summary']
+        self._send_json({'status': status, 'progress': progress, 'error': error, 'summary': summary})
 
-            self._send_json({
-                'total_bookmarks': len(illust_ids),
-                'local_count': len(local_files),
-                'matched_count': len(matched),
-                'matched': matched[:1000],
-            })
+    def _handle_pixiv_job_result(self):
+        """GET /api/pixiv/job/result: 仅 done 时返回 matched 数组"""
+        with pixiv_job['lock']:
+            result = pixiv_job['result'] if pixiv_job['status'] == 'done' else []
+        self._send_json({'matched': result})
 
-        except urllib.error.HTTPError as e:
-            if e.code == 403:
-                self._send_json({'error': 'Pixiv 认证失败，请检查 PHPSESSID 是否有效或已过期'})
-            elif e.code == 404:
-                self._send_json({'error': 'Pixiv 用户不存在，请检查 UID'})
-            else:
-                self._send_json({'error': f'HTTP {e.code}'})
+    def _handle_blacklist(self):
+        """GET /api/blacklist: 返回已排序 id 列表"""
+        self._send_json({'ids': sorted(load_blacklist())})
+
+    def _handle_blacklist_add(self):
+        """POST /api/blacklist/add: 支持裸 ID 与 /artworks/ 链接"""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self._send_json({'error': 'Empty request body'})
+                return
+            body = self.rfile.read(content_length)
+            req_data = json.loads(body)
         except Exception as e:
-            console_log('ERROR', f'Pixiv 查重失败: {e}')
-            self._send_json({'error': str(e)})
+            self._send_json({'error': f'Invalid request body: {e}'})
+            return
+        nid = normalize_illust_id(req_data.get('id', ''))
+        if not nid:
+            self._send_json({'error': '无法识别的作品 ID'})
+            return
+        ids = load_blacklist()
+        ids.add(nid)
+        save_blacklist(ids)
+        console_log('SCAN', f'Pixiv: 黑名单添加 {nid} (共 {len(ids)} 个)')
+        self._send_json({'ok': True})
+
+    def _handle_blacklist_remove(self):
+        """POST /api/blacklist/remove"""
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            if content_length == 0:
+                self._send_json({'error': 'Empty request body'})
+                return
+            body = self.rfile.read(content_length)
+            req_data = json.loads(body)
+        except Exception as e:
+            self._send_json({'error': f'Invalid request body: {e}'})
+            return
+        nid = normalize_illust_id(req_data.get('id', ''))
+        if not nid:
+            self._send_json({'error': '无法识别的作品 ID'})
+            return
+        ids = load_blacklist()
+        ids.discard(nid)
+        save_blacklist(ids)
+        console_log('SCAN', f'Pixiv: 黑名单移除 {nid} (剩 {len(ids)} 个)')
+        self._send_json({'ok': True})
+
+    def _handle_blacklist_clear(self):
+        """POST /api/blacklist/clear: 保存空集"""
+        save_blacklist(set())
+        console_log('SCAN', 'Pixiv: 黑名单已清空')
+        self._send_json({'ok': True})
 
     def _handle_image(self, params):
         phone_url = params.get('url', [None])[0]
@@ -1348,6 +1703,29 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             console_log(cat, msg)
         self._send_json({'ok': True})
 
+    def _handle_logs(self, params):
+        """GET /api/logs?since=<int>: 增量返回缓冲日志; truncated 统一语义:
+        since > 0 且（缓冲为空 或 最早条目 id > since 或 since > next_id）"""
+        try:
+            since = int(params.get('since', ['0'])[0])
+        except (TypeError, ValueError):
+            since = 0
+        with LOG_LOCK:
+            items = list(LOG_BUFFER)
+            next_id = LOG_LAST_ID
+            truncated = since > 0 and (
+                len(items) == 0 or items[0][0] > since or since > next_id
+            )
+            logs = [{'id': i, 'ts': t, 'cat': c, 'msg': m}
+                    for i, t, c, m in items if i > since]
+        self._send_json({'logs': logs, 'next_id': next_id, 'truncated': truncated})
+
+    def _handle_logs_clear(self):
+        """POST /api/logs/clear: 只清内存缓冲, 不动 sync.log, 计数器不重置"""
+        with LOG_LOCK:
+            LOG_BUFFER.clear()
+        self._send_json({'ok': True})
+
     def _handle_config(self):
         self._send_json(load_config())
 
@@ -1376,7 +1754,7 @@ def main():
     sys.stderr.write(f'{banner}\n')
     sys.stderr.flush()
     console_log('DONE', '服务器就绪')
-    log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd(), 'sync.log')
+    log_path = os.path.join(runtime_dir(), 'sync.log')
     sys.stderr.write(f'  日志文件: {log_path}\n')
     sys.stderr.flush()
 
