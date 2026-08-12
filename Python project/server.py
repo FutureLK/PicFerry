@@ -227,7 +227,7 @@ tr:hover td{background:#1c2128}
 .dir-btn.active{background:#1f6feb;color:#fff}
 .dir-btn:not(.active):hover{color:#c9d1d9}
 .dir-btn:first-child{border-right:1px solid #30363d}
-#syncBtn{margin-top:12px}
+#syncBtn{margin-top:0}
 .hidden{display:none}
 input[type="checkbox"]{accent-color:#58a6ff;cursor:pointer}
 /* ─── Tabs ─── */
@@ -254,6 +254,7 @@ input[type="checkbox"]{accent-color:#58a6ff;cursor:pointer}
 .fade-in{animation:fadeIn .35s ease-out both}
 .pulse{animation:pulse 2s ease-in-out infinite}
 .slide-down{animation:slideDown .3s ease-out forwards}
+#syncBtn.slide-in{animation:slideDown .3s ease-out}
 .fill-bar{animation:fillBar .6s ease-out forwards}
 tr.row-enter{animation:fadeIn .35s ease-out both}
 /* ─── Help tooltips ─── */
@@ -302,6 +303,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
 
     <div class="actions" style="margin-top:16px">
       <button class="btn btn-primary" id="scanBtn">扫描比对</button>
+      <button class="btn btn-danger hidden" id="syncBtn" disabled>同步到设备A（0 个文件）</button>
       <div class="dir-group" id="dirGroup">
         <button class="dir-btn active" data-dir="ab">B → A</button>
         <button class="dir-btn" data-dir="ba">A → B</button>
@@ -338,7 +340,6 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
           <tbody id="fileList"></tbody>
         </table>
       </div>
-      <button class="btn btn-danger" id="syncBtn" disabled>同步到设备A（0 个文件）</button>
     </div>
 
     <div id="emptyState" class="empty-state" style="margin:0">
@@ -711,8 +712,8 @@ async function doScan() {
     const data1 = await res1.json();
     const data2 = await res2.json();
 
-    if (data1.error) { setStatus('设备 A 连接失败: ' + data1.error, 'error'); scanBtn.disabled = false; showProgress(false); return; }
-    if (data2.error) { setStatus('设备 B 连接失败: ' + data2.error, 'error'); scanBtn.disabled = false; showProgress(false); return; }
+    if (data1.error) { setStatus('设备 A 连接失败: ' + data1.error, 'error'); syncBtn.classList.add('hidden'); scanBtn.disabled = false; showProgress(false); return; }
+    if (data2.error) { setStatus('设备 B 连接失败: ' + data2.error, 'error'); syncBtn.classList.add('hidden'); scanBtn.disabled = false; showProgress(false); return; }
 
     loadedFilesA = data1.files || [];
     loadedFilesB = data2.files || [];
@@ -734,6 +735,7 @@ async function doScan() {
         setStatus('扫描完成，设备 A 中没有发现新文件', 'success');
       }
       logToServer('DONE', '扫描完成，无新文件');
+      syncBtn.classList.add('hidden');
       scanBtn.disabled = false;
       return;
     }
@@ -743,6 +745,10 @@ async function doScan() {
     logToServer('DONE', '发现 ' + currentFiles.length + ' 个待同步文件');
     renderTable();
     resultSection.classList.remove('hidden');
+    syncBtn.classList.remove('hidden');
+    syncBtn.classList.remove('slide-in');
+    void syncBtn.offsetWidth;
+    syncBtn.classList.add('slide-in');
 
     if (hashToggle.checked) {
       await doHash();
