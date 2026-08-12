@@ -166,8 +166,6 @@ HTML = r"""<!DOCTYPE html>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
 .container{max-width:960px;margin:0 auto;padding:24px 16px}
-h1{font-size:22px;font-weight:600;color:#e6edf3;margin-bottom:4px}
-.subtitle{font-size:13px;color:#8b949e;margin-bottom:24px}
 .card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:16px}
 .card-title{font-size:13px;font-weight:600;color:#8b949e;margin-bottom:12px;letter-spacing:.3px}
 .input-group{margin-bottom:12px}
@@ -284,8 +282,6 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
 </head>
 <body>
 <div class="container">
-  <h1>图片同步</h1>
-  <div class="subtitle">局域网文件比对与传输</div>
 
   <nav class="tabs" id="tabBar"></nav>
 
