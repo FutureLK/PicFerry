@@ -404,19 +404,17 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
     <div id="pixivResult" class="hidden">
       <div class="pixiv-stats">
         <span>收藏总数: <strong id="pixivTotal">0</strong></span>
-        <span>本地图片: <strong id="pixivLocalCount">0</strong></span>
-        <span>已在 Pixiv 收藏: <strong id="pixivMatched">0</strong></span>
+        <span>缺失作品: <strong id="pixivMissing">0</strong></span>
+        <span>缺失分p总数: <strong id="pixivMissingPages">0</strong></span>
       </div>
       <div class="table-wrap" style="margin-top:12px">
         <table>
           <thead>
             <tr>
               <th style="width:40px">#</th>
-              <th style="width:56px">预览</th>
-              <th>文件名</th>
-              <th style="width:80px">大小</th>
-              <th style="width:100px">Illust ID</th>
-              <th style="width:90px">分p</th>
+              <th>范围</th>
+              <th style="width:100px">ID</th>
+              <th style="width:110px">分p</th>
             </tr>
           </thead>
           <tbody id="pixivFileList"></tbody>
@@ -1121,37 +1119,29 @@ async function pollPixivJob() {
 
 function renderPixivResult(summary, matched) {
   document.getElementById('pixivTotal').textContent = summary ? (summary.total_bookmarks ?? 0) : 0;
-  document.getElementById('pixivLocalCount').textContent = summary ? (summary.local_count ?? 0) : 0;
+  document.getElementById('pixivMissing').textContent = summary ? (summary.missing_works ?? 0) : 0;
+  document.getElementById('pixivMissingPages').textContent = summary ? (summary.missing_pages ?? 0) : 0;
 
   const tbody = document.getElementById('pixivFileList');
-  const pixivPath = document.getElementById('pixivPath').value.trim();
   if (matched.length > 0) {
     let html = '';
     matched.forEach((f, i) => {
-      const sizeStr = f.size != null ? formatSize(f.size) : '-';
-      const thumbUrl = pixivPath ? '/api/image?url=' + encodeURIComponent(pixivPath) + '&file=' + encodeURIComponent(f.name) : '';
-      const pageStr = (f.page != null && f.pageCount != null) ? ('p' + f.page + '/共' + f.pageCount + 'p') : '-';
       html += '<tr>';
       html += '<td>' + (i + 1) + '</td>';
-      html += '<td class="thumb-wrap">';
-      html += '<img class="thumb" data-src="' + escapeHtml(thumbUrl) + '" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" loading="lazy">';
-      html += '</td>';
-      html += '<td class="filename">' + escapeHtml(f.name) + '</td>';
-      html += '<td>' + sizeStr + '</td>';
-      html += '<td>' + escapeHtml(f.illust_id || '') + '</td>';
-      html += '<td>' + pageStr + '</td>';
+      html += '<td class="filename">' + escapeHtml(f.illust_id + '_' + f.range) + '</td>';
+      html += '<td>' + escapeHtml(f.illust_id) + '</td>';
+      html += '<td>已有' + f.saved_pages + '张/共' + f.pageCount + '张</td>';
       html += '</tr>';
     });
     tbody.innerHTML = html;
-    observeThumbs(tbody);   // 复用 todo 11 懒加载机制
   } else {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#484f58;padding:20px">没有找到匹配的文件</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#484f58;padding:20px">没有缺失作品</td></tr>';
   }
   document.getElementById('pixivResult').classList.remove('hidden');
   if (matched.length > 0) {
-    setPixivStatus('查重完成，发现 ' + matched.length + ' 个已在 Pixiv 收藏的文件', 'success');
+    setPixivStatus('查重完成，发现 ' + (summary?.missing_works ?? matched.length) + ' 个缺失作品（缺失分p ' + (summary?.missing_pages ?? 0) + ' 张）', 'success');
   } else {
-    setPixivStatus('查重完成，本地文件均不在 Pixiv 收藏中', 'success');
+    setPixivStatus('没有缺失作品，收藏完整', 'success');
   }
 }
 
