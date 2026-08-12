@@ -210,6 +210,13 @@ tr:hover td{background:#1c2128}
 .progress-text{font-size:13px;color:#8b949e}
 .empty-state{text-align:center;padding:40px 20px;color:#484f58;font-size:14px}
 .input-hint{font-size:12px;color:#484f58;margin-top:2px}
+.input-badge{font-size:11px;margin-top:2px;color:#484f58;min-height:14px}
+.input-badge.http{color:#58a6ff}
+.input-badge.ftp{color:#d29922}
+.input-badge.local{color:#3fb950}
+.input-badge.invalid{color:#f85149}
+.input-badge.error{color:#f85149}
+.input-badge.success{color:#3fb950}
 /* ─── Stats bar ─── */
 .stats{display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap}
 .stat-item{flex:1;min-width:180px;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px}
@@ -225,9 +232,16 @@ tr:hover td{background:#1c2128}
 #syncBtn{margin-top:12px}
 .hidden{display:none}
 input[type="checkbox"]{accent-color:#58a6ff;cursor:pointer}
+/* ─── Tabs ─── */
+.tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #30363d;flex-wrap:wrap}
+.tab-btn{padding:8px 18px;font-size:13px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;transition:all .2s}
+.tab-btn:hover{color:#c9d1d9}
+.tab-btn.active{color:#e6edf3;border-bottom-color:#58a6ff}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
 /* ─── Thumbnail ─── */
-.thumb-wrap{width:48px;height:48px;flex-shrink:0}
-.thumb{width:48px;height:48px;object-fit:cover;border-radius:4px;display:block;background:#0d1117}
+.thumb-wrap{width:var(--thumb-size,48px);height:var(--thumb-size,48px);flex-shrink:0}
+.thumb{width:var(--thumb-size,48px);height:var(--thumb-size,48px);object-fit:cover;border-radius:4px;display:block;background:#0d1117}
 .thumb-placeholder{width:48px;height:48px;border-radius:4px;background:#21262d;display:flex;align-items:center;justify-content:center;font-size:16px;color:#484f58}
 /* ─── Preview panel ─── */
 .preview-panel{display:none;position:fixed;z-index:1000;background:#161b22;border:1px solid #30363d;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);overflow:hidden;pointer-events:none;max-width:420px}
@@ -257,6 +271,15 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
 .pixiv-status.error{color:#f85149}
 .pixiv-stats{display:flex;gap:16px;padding:10px 14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:13px;color:#8b949e;flex-wrap:wrap;margin-top:12px}
 .pixiv-stats strong{color:#e6edf3;font-weight:600}
+/* ─── Log panel ─── */
+.log-line{display:block;white-space:pre-wrap;word-break:break-all}
+.log-line .cat-SCAN{color:#39c5cf}
+.log-line .cat-HASH{color:#d29922}
+.log-line .cat-SYNC{color:#58a6ff}
+.log-line .cat-IMAGE{color:#8b949e}
+.log-line .cat-DONE{color:#3fb950}
+.log-line .cat-ERROR{color:#f85149}
+.log-line .cat-INFO{color:#c9d1d9}
 </style>
 </head>
 <body>
@@ -264,15 +287,20 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
   <h1>图片同步</h1>
   <div class="subtitle">局域网文件比对与传输</div>
 
+  <nav class="tabs" id="tabBar"></nav>
+
   <!-- ═══ 设备连接 ═══ -->
+  <section class="tab-panel" id="tab-device">
   <div class="card">
     <div class="input-group">
       <label for="urlA">设备 A（接收端）</label>
-      <input type="text" id="urlA" placeholder="http://192.168.1.100:1234/DCIM/Pixez/ 或 ftp://192.168.1.100:21/ 或 C:\Users\...\Pictures">
+      <input type="text" id="urlA" placeholder="http://192.168.1.100:1234/DCIM/Pixez/">
+      <div class="input-badge" id="badge-urlA"></div>
     </div>
     <div class="input-group">
       <label for="urlB">设备 B（来源端）</label>
-      <input type="text" id="urlB" placeholder="http://192.168.1.101:1234/DCIM/ 或 ftp://192.168.1.101:21/ 或 D:\Photos">
+      <input type="text" id="urlB" placeholder="http://192.168.1.101:1234/DCIM/">
+      <div class="input-badge" id="badge-urlB"></div>
     </div>
     <div class="input-hint">支持 HTTP 目录列表、FTP 直连、本地磁盘路径，自动识别</div>
 
@@ -321,8 +349,10 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
       <div>输入设备链接后点击「扫描比对」查看结果</div>
     </div>
   </div>
+  </section>
 
   <!-- ═══ Pixiv 收藏查重 ═══ -->
+  <section class="tab-panel" id="tab-pixiv">
   <div class="card">
     <div class="card-title">Pixiv 收藏查重</div>
     <div class="input-group">
@@ -330,7 +360,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
         Pixiv UID
         <span class="help-toggle" data-target="helpUid">?</span>
       </label>
-      <input type="text" id="pixivUid" placeholder="12345678">
+      <input type="text" id="pixivUid" placeholder="12345678（个人主页地址栏末尾数字）">
       <div id="helpUid" class="help-text hidden">
         <strong>如何获取 Pixiv UID：</strong>
         <ol>
@@ -345,7 +375,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
         PHPSESSID
         <span class="help-toggle" data-target="helpPhpsessid">?</span>
       </label>
-      <input type="password" id="pixivPhpsessid" placeholder="浏览器 Cookie 中的 PHPSESSID 值">
+      <input type="password" id="pixivPhpsessid" placeholder="浏览器 Cookie 中的 PHPSESSID 值（字母数字）">
       <div id="helpPhpsessid" class="help-text hidden">
         <strong>如何获取 PHPSESSID：</strong>
         <ol>
@@ -360,10 +390,17 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
     <div class="input-group" style="margin-bottom:0">
       <label for="pixivPath">本地文件夹路径</label>
       <input type="text" id="pixivPath" placeholder="C:\Users\...\Pictures 或 ftp://192.168.1.100:21/">
+      <div class="input-badge" id="badge-pixivPath"></div>
+    </div>
+
+    <div class="input-group">
+      <label for="pixivLimit">扫描数量（0 = 全部）</label>
+      <input type="number" id="pixivLimit" min="0" step="1" placeholder="0">
     </div>
 
     <div class="actions" style="margin-top:16px;margin-bottom:12px">
       <button class="btn btn-primary" id="pixivFetchBtn">拉取收藏</button>
+      <button class="btn btn-danger" id="pixivStopBtn" style="display:none" title="网络请求阶段停止最长等待当前请求超时（30s）；本地扫描阶段需等待当前扫描完成后生效">终止</button>
       <span id="pixivStatus" class="pixiv-status">就绪</span>
     </div>
 
@@ -378,15 +415,68 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
           <thead>
             <tr>
               <th style="width:40px">#</th>
+              <th style="width:56px">预览</th>
               <th>文件名</th>
               <th style="width:80px">大小</th>
               <th style="width:100px">Illust ID</th>
+              <th style="width:90px">分p</th>
             </tr>
           </thead>
           <tbody id="pixivFileList"></tbody>
         </table>
       </div>
     </div>
+  </div>
+  </section>
+
+  <!-- ═══ 更多设置 ═══ -->
+  <section class="tab-panel" id="tab-settings">
+    <div class="card">
+      <div class="card-title">界面设置</div>
+      <div class="input-group">
+        <label for="settingThumbSize">缩略图尺寸</label>
+        <input type="range" id="settingThumbSize" min="16" max="128" step="4" style="width:100%">
+        <span id="settingThumbSizeVal"></span>px
+      </div>
+      <div class="input-group">
+        <label for="settingPreviewDelay">预览悬浮延迟</label>
+        <input type="number" id="settingPreviewDelay" min="100" max="2000" step="50"> ms
+      </div>
+      <div class="input-group">
+        <label for="settingPixivInterval">Pixiv 请求间隔（防限流）</label>
+        <input type="number" id="settingPixivInterval" min="0.1" max="10" step="0.1"> s
+      </div>
+      <div class="input-group">
+        <label for="settingMaxRows">结果行数上限</label>
+        <input type="number" id="settingMaxRows" min="10" max="5000" step="10">
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Pixiv 查重黑名单（illust ID）</div>
+      <div class="input-group">
+        <input type="text" id="blacklistInput" placeholder="作品 ID 或作品链接，如 https://www.pixiv.net/artworks/123456">
+        <div class="input-badge" id="blacklistMsg"></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="blacklistAddBtn">添加</button>
+        <button class="btn btn-danger" id="blacklistClearBtn">清空</button>
+      </div>
+      <div id="blacklistList"></div>
+    </div>
+  </section>
+
+  <!-- ═══ 日志 ═══ -->
+  <section class="tab-panel" id="tab-logs">
+    <div class="card">
+      <div class="card-title">命令行日志</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <label class="toggle-group"><input type="checkbox" id="logAutoScroll" checked> 自动滚动</label>
+        <button class="btn" id="logPauseBtn">暂停</button>
+        <button class="btn btn-danger" id="logClearBtn">清空</button>
+      </div>
+      <div id="logList" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;height:480px;overflow-y:auto;padding:10px 12px;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;line-height:1.6"></div>
+    </div>
+  </section>
   </div>
 
   <!-- ═══ 预览面板（在所有标签页之外，避免 position:fixed 嵌套问题）═══ -->
@@ -397,6 +487,38 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
 </div>
 
 <script>
+// ─── Tab registry ────────────────────────────────────────────────
+// 【新增标签三步】1) 在 HTML 加 <section class="tab-panel" id="tab-xxx">
+//  2) 在 TABS 数组加 {id:'xxx', title:'名称'}  3) 往该 section 填充内容
+const TABS = [
+  { id: 'device',  title: '设备同步' },
+  { id: 'pixiv',   title: 'Pixiv 查重' },
+  { id: 'settings',title: '更多设置' },
+  { id: 'logs',    title: '日志' },
+];
+
+function activateTab(id) {
+  TABS.forEach(t => {
+    const panel = document.getElementById('tab-' + t.id);
+    if (panel) panel.classList.toggle('active', t.id === id);
+  });
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === id);
+  });
+}
+
+function renderTabBar() {
+  const bar = document.getElementById('tabBar');
+  bar.innerHTML = TABS.map(t =>
+    '<button class="tab-btn" data-tab="' + t.id + '">' + t.title + '</button>'
+  ).join('');
+  bar.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', function() { activateTab(this.dataset.tab); });
+  });
+}
+renderTabBar();
+activateTab('device');
+
 const urlA = document.getElementById('urlA');
 const urlB = document.getElementById('urlB');
 const scanBtn = document.getElementById('scanBtn');
@@ -419,15 +541,24 @@ let loadedFilesA = [];
 let loadedFilesB = [];
 
 // ─── Config auto-fill & save ───────────────────────────────────
+let globalConfig = null;   // 供设置 tab / 预览延迟 / 缩略图尺寸读取
+
 async function loadConfig() {
   try {
     const res = await fetch('/api/config');
     const cfg = await res.json();
+    globalConfig = cfg;
     if (cfg.dev1ceA) urlA.value = cfg.dev1ceA;
     if (cfg.dev1ceB) urlB.value = cfg.dev1ceB;
     if (cfg.PixivUID) document.getElementById('pixivUid').value = cfg.PixivUID;
     if (cfg.PHPSESSID) document.getElementById('pixivPhpsessid').value = cfg.PHPSESSID;
     if (cfg.PixivL) document.getElementById('pixivPath').value = cfg.PixivL;
+    if (cfg.pixivLimit != null) document.getElementById('pixivLimit').value = cfg.pixivLimit;
+    // 缩略图尺寸联动: CSS 变量 --thumb-size
+    const ts = parseInt(cfg.thumbnailSize) || 48;
+    document.documentElement.style.setProperty('--thumb-size', ts + 'px');
+    // 设置 tab 控件填充
+    fillSettingsControls();
   } catch (e) {
     // config 文件不存在或解析失败，静默忽略
   }
@@ -440,6 +571,11 @@ async function saveConfig() {
     PixivUID: document.getElementById('pixivUid').value.trim(),
     PHPSESSID: document.getElementById('pixivPhpsessid').value.trim(),
     PixivL: document.getElementById('pixivPath').value.trim(),
+    pixivLimit: document.getElementById('pixivLimit').value.trim(),
+    thumbnailSize: settingThumbSize.value,
+    previewDelay: settingPreviewDelay.value,
+    pixivInterval: settingPixivInterval.value,
+    maxRows: settingMaxRows.value,
   };
   try {
     await fetch('/api/config/save', {
@@ -451,6 +587,67 @@ async function saveConfig() {
     // 保存失败静默忽略
   }
 }
+
+// ─── 输入框智能识别（类型徽标 / 协议补全 / 链接提取）─────────────────
+// 徽标判定与后端 is_local_path 一致: ^[a-zA-Z]:[\\/] 与 file:/// 判为本地路径
+
+function detectAddressType(val) {
+  if (!val) return null;
+  if (/^https?:\/\//i.test(val)) return { cls: 'http', text: 'HTTP 链接' };
+  if (/^ftp:\/\//i.test(val)) return { cls: 'ftp', text: 'FTP 链接' };
+  if (/^file:\/\//i.test(val) || /^[a-zA-Z]:[\\/]/.test(val)) return { cls: 'local', text: '本地路径' };
+  return { cls: 'invalid', text: '无法识别的地址格式' };
+}
+
+function setBadge(badgeId, info) {
+  const b = document.getElementById(badgeId);
+  if (!b) return;
+  b.className = 'input-badge' + (info ? ' ' + info.cls : '');
+  b.textContent = info ? info.text : '';
+}
+
+const ADDR_INPUTS = [
+  { el: urlA, badge: 'badge-urlA' },
+  { el: urlB, badge: 'badge-urlB' },
+  { el: document.getElementById('pixivPath'), badge: 'badge-pixivPath' },
+];
+
+let badgeTimers = {};
+ADDR_INPUTS.forEach(item => {
+  const el = item.el;
+  if (!el) return;
+  el.addEventListener('input', function() {
+    clearTimeout(badgeTimers[item.badge]);
+    badgeTimers[item.badge] = setTimeout(() => {
+      setBadge(item.badge, detectAddressType(el.value.trim()));
+    }, 300);
+  });
+  el.addEventListener('blur', function() {
+    const val = el.value.trim();
+    // 协议自动补全: 形如 192.168.1.100:1234 的无协议地址 → 补 http://
+    if (/^([\w.-]+:\d{1,5})(\/.*)?$/.test(val)) {
+      el.value = 'http://' + val;
+      setBadge(item.badge, { cls: 'http', text: '已自动补全 http://' });
+    } else {
+      setBadge(item.badge, detectAddressType(val));
+    }
+  });
+});
+
+// 粘贴 Pixiv 用户页链接 → 提取 UID 填入
+function extractPixivUid(str) {
+  const m = /pixiv\.net\/users\/(\d+)/i.exec(str || '');
+  return m ? m[1] : null;
+}
+const pixivUidInput = document.getElementById('pixivUid');
+function extractUidFromInput() {
+  const uid = extractPixivUid(pixivUidInput.value);
+  if (uid) pixivUidInput.value = uid;
+}
+pixivUidInput.addEventListener('blur', extractUidFromInput);
+pixivUidInput.addEventListener('paste', function() {
+  setTimeout(extractUidFromInput, 50);  // 等粘贴完成后再读值
+});
 
 const statsBar = document.getElementById('statsBar');
 const dirBtns = document.querySelectorAll('.dir-btn');
@@ -594,14 +791,16 @@ function runDedup() {
 
 function renderTable() {
   let html = '';
+  const srcUrl = scanDir === 'ab' ? urlB.value.trim() : urlA.value.trim();
   currentFiles.forEach((f, i) => {
     const sizeStr = f.size != null ? formatSize(f.size) : '-';
     const delay = Math.min(i * 30, 300);
+    const thumbUrl = srcUrl ? '/api/image?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name) : '';
     html += '<tr class="row-enter" style="animation-delay:' + delay + 'ms">';
     html += '<td><input type="checkbox" class="file-cb" data-idx="' + i + '" checked></td>';
     html += '<td>' + (i + 1) + '</td>';
     html += '<td class="thumb-wrap">';
-    html += '<img class="thumb" data-src="' + i + '" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" loading="lazy">';
+    html += '<img class="thumb" data-src="' + escapeHtml(thumbUrl) + '" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" loading="lazy">';
     html += '</td>';
     html += '<td class="filename"><span class="filename-link" data-idx="' + i + '">' + escapeHtml(f.name) + '</span></td>';
     html += '<td>' + sizeStr + '</td>';
@@ -624,15 +823,35 @@ function renderTable() {
   });
 }
 
+// ─── 缩略图懒加载（IntersectionObserver 按需赋值 src）────────────────
+// 保留原生 loading="lazy" 兜底; data-src 直接存真实 URL; 已加载后移除 data-src 防重复加载
+
+const thumbObserver = new IntersectionObserver((entries, obs) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const img = entry.target;
+    if (img.dataset.src) {
+      img.src = img.dataset.src;
+      img.removeAttribute('data-src');
+    }
+    obs.unobserve(img);
+  });
+}, { rootMargin: '200px' });
+
 function loadThumbnails() {
-  const srcUrl = scanDir === 'ab' ? urlB.value.trim() : urlA.value.trim();
-  if (!srcUrl) return;
+  // 观察当前所有未加载的 .thumb（设备表与 Pixiv 结果表共用同一机制）
   document.querySelectorAll('.thumb').forEach(img => {
-    const idx = parseInt(img.dataset.src);
-    const f = currentFiles[idx];
-    if (!f) return;
-    const src = '/api/image?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name);
-    img.src = src;
+    if (!img.dataset.src) return;
+    thumbObserver.observe(img);
+  });
+}
+
+function observeThumbs(containerEl) {
+  // 供 Pixiv 结果表等动态渲染后调用: 仅观察容器内未加载的缩略图
+  if (!containerEl) return;
+  containerEl.querySelectorAll('.thumb').forEach(img => {
+    if (!img.dataset.src) return;
+    thumbObserver.observe(img);
   });
 }
 
@@ -652,6 +871,8 @@ function bindPreviewHover() {
       const srcUrl = scanDir === 'ab' ? urlB.value.trim() : urlA.value.trim();
       if (!srcUrl) return;
 
+      // 预览延迟可配置 (config previewDelay, 默认 500ms); null 保护防 loadConfig 未完成
+      const delay = parseInt((globalConfig || {}).previewDelay) || 500;
       previewTimer = setTimeout(() => {
         const rect = this.getBoundingClientRect();
         previewImg.src = '/api/image?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name);
@@ -666,7 +887,7 @@ function bindPreviewHover() {
         let left = Math.min(rect.left, window.innerWidth - 420);
         previewPanel.style.top = Math.max(8, top) + 'px';
         previewPanel.style.left = Math.max(8, left) + 'px';
-      }, 500);
+      }, delay);
     });
 
     link.addEventListener('mouseleave', function() {
@@ -794,67 +1015,141 @@ function setPixivStatus(msg, type) {
   el.className = 'pixiv-status' + (type ? ' ' + type : '');
 }
 
+let pixivPollTimer = null;
+
 async function doFetchBookmarks() {
   const uid = document.getElementById('pixivUid').value.trim();
   const phpsessid = document.getElementById('pixivPhpsessid').value.trim();
   const path = document.getElementById('pixivPath').value.trim();
+  const limitRaw = document.getElementById('pixivLimit').value.trim();
 
   if (!uid || !phpsessid) { setPixivStatus('请填写 Pixiv UID 和 PHPSESSID', 'error'); return; }
   if (!path) { setPixivStatus('请填写本地文件夹路径', 'error'); return; }
 
-  const btn = document.getElementById('pixivFetchBtn');
-  btn.disabled = true;
-  setPixivStatus('正在拉取 Pixiv 收藏...', 'loading');
+  let limit = 0;
+  if (limitRaw !== '') {
+    limit = parseInt(limitRaw, 10);
+    if (isNaN(limit) || limit < 0) limit = 0;
+  }
+
+  const fetchBtn = document.getElementById('pixivFetchBtn');
+  const stopBtn = document.getElementById('pixivStopBtn');
+  fetchBtn.disabled = true;
+  stopBtn.style.display = 'inline-flex';
+  setPixivStatus('正在启动 Pixiv 扫描...', 'loading');
   document.getElementById('pixivResult').classList.add('hidden');
 
   try {
     const res = await fetch('/api/pixiv/bookmarks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uid, phpsessid, path })
+      body: JSON.stringify({ uid, phpsessid, path, limit })
     });
     const data = await res.json();
 
     if (data.error) {
       setPixivStatus('错误: ' + data.error, 'error');
+      fetchBtn.disabled = false;
+      stopBtn.style.display = 'none';
       return;
     }
 
-    document.getElementById('pixivTotal').textContent = data.total_bookmarks ?? 0;
-    document.getElementById('pixivLocalCount').textContent = data.local_count ?? 0;
-    document.getElementById('pixivMatched').textContent = data.matched_count ?? 0;
-
-    const tbody = document.getElementById('pixivFileList');
-    const matched = data.matched || [];
-    if (matched.length > 0) {
-      let html = '';
-      matched.forEach((f, i) => {
-        const sizeStr = f.size != null ? formatSize(f.size) : '-';
-        html += '<tr>';
-        html += '<td>' + (i + 1) + '</td>';
-        html += '<td class="filename">' + escapeHtml(f.name) + '</td>';
-        html += '<td>' + sizeStr + '</td>';
-        html += '<td>' + escapeHtml(f.illust_id || '') + '</td>';
-        html += '</tr>';
-      });
-      tbody.innerHTML = html;
-    } else {
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#484f58;padding:20px">没有找到匹配的文件</td></tr>';
-    }
-
-    document.getElementById('pixivResult').classList.remove('hidden');
-    if (matched.length > 0) {
-      setPixivStatus('查重完成，发现 ' + matched.length + ' 个已在 Pixiv 收藏的文件', 'success');
-    } else {
-      setPixivStatus('查重完成，本地文件均不在 Pixiv 收藏中', 'success');
-    }
+    // 启动成功 → 1s 轮询 job 状态
+    pixivPollTimer = setInterval(pollPixivJob, 1000);
+    pollPixivJob();
   } catch (e) {
     setPixivStatus('请求失败: ' + e.message, 'error');
+    fetchBtn.disabled = false;
+    stopBtn.style.display = 'none';
   }
-  btn.disabled = false;
+}
+
+async function pollPixivJob() {
+  const fetchBtn = document.getElementById('pixivFetchBtn');
+  const stopBtn = document.getElementById('pixivStopBtn');
+  try {
+    const res = await fetch('/api/pixiv/job');
+    const job = await res.json();
+
+    if (job.status === 'fetching') {
+      const p = job.progress || {};
+      setPixivStatus('拉取中 ' + (p.fetched || 0) + '/' + (p.total || 0), 'loading');
+      return;
+    }
+    if (job.status === 'scanning') {
+      setPixivStatus('扫描本地目录…', 'loading');
+      return;
+    }
+    if (job.status === 'matching') {
+      const p = job.progress || {};
+      setPixivStatus('匹配中，已命中 ' + (p.fetched || 0) + ' 个', 'loading');
+      return;
+    }
+
+    // 终态: 停止轮询, 恢复按钮
+    clearInterval(pixivPollTimer);
+    pixivPollTimer = null;
+    fetchBtn.disabled = false;
+    stopBtn.style.display = 'none';
+
+    if (job.status === 'done') {
+      const r2 = await fetch('/api/pixiv/job/result');
+      const resultData = await r2.json();
+      renderPixivResult(job.summary, resultData.matched || []);
+    } else if (job.status === 'stopped') {
+      setPixivStatus('已终止', 'error');
+    } else if (job.status === 'error') {
+      setPixivStatus('错误: ' + (job.error || '未知错误'), 'error');
+    }
+  } catch (e) {
+    // 轮询失败静默, 下个周期重试
+  }
+}
+
+function renderPixivResult(summary, matched) {
+  document.getElementById('pixivTotal').textContent = summary ? (summary.total_bookmarks ?? 0) : 0;
+  document.getElementById('pixivLocalCount').textContent = summary ? (summary.local_count ?? 0) : 0;
+  document.getElementById('pixivMatched').textContent = summary ? (summary.matched_count ?? 0) : 0;
+
+  const tbody = document.getElementById('pixivFileList');
+  const pixivPath = document.getElementById('pixivPath').value.trim();
+  if (matched.length > 0) {
+    let html = '';
+    matched.forEach((f, i) => {
+      const sizeStr = f.size != null ? formatSize(f.size) : '-';
+      const thumbUrl = pixivPath ? '/api/image?url=' + encodeURIComponent(pixivPath) + '&file=' + encodeURIComponent(f.name) : '';
+      const pageStr = (f.page != null && f.pageCount != null) ? ('p' + f.page + '/共' + f.pageCount + 'p') : '-';
+      html += '<tr>';
+      html += '<td>' + (i + 1) + '</td>';
+      html += '<td class="thumb-wrap">';
+      html += '<img class="thumb" data-src="' + escapeHtml(thumbUrl) + '" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" loading="lazy">';
+      html += '</td>';
+      html += '<td class="filename">' + escapeHtml(f.name) + '</td>';
+      html += '<td>' + sizeStr + '</td>';
+      html += '<td>' + escapeHtml(f.illust_id || '') + '</td>';
+      html += '<td>' + pageStr + '</td>';
+      html += '</tr>';
+    });
+    tbody.innerHTML = html;
+    observeThumbs(tbody);   // 复用 todo 11 懒加载机制
+  } else {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#484f58;padding:20px">没有找到匹配的文件</td></tr>';
+  }
+  document.getElementById('pixivResult').classList.remove('hidden');
+  if (matched.length > 0) {
+    setPixivStatus('查重完成，发现 ' + matched.length + ' 个已在 Pixiv 收藏的文件', 'success');
+  } else {
+    setPixivStatus('查重完成，本地文件均不在 Pixiv 收藏中', 'success');
+  }
+}
+
+function stopPixivJob() {
+  fetch('/api/pixiv/bookmarks/stop', { method: 'POST' }).catch(() => {});
+  setPixivStatus('正在终止…', 'loading');
 }
 
 document.getElementById('pixivFetchBtn').addEventListener('click', doFetchBookmarks);
+document.getElementById('pixivStopBtn').addEventListener('click', stopPixivJob);
 
 scanBtn.addEventListener('click', doScan);
 hashToggle.addEventListener('change', function() {
@@ -875,15 +1170,162 @@ selectAll.addEventListener('change', function() {
 });
 syncBtn.addEventListener('click', doSync);
 
+// ─── 日志面板（轮询 /api/logs; 六色映射; 自动滚动/暂停/清空）─────────
+let logLastId = 0;
+let logPaused = false;
+const CATS = ['SCAN', 'HASH', 'SYNC', 'IMAGE', 'DONE', 'ERROR'];
+
+async function pollLogs() {
+  if (logPaused) return;
+  try {
+    const resp = await fetch('/api/logs?since=' + logLastId);
+    const data = await resp.json();
+    const list = document.getElementById('logList');
+    if (data.truncated) {
+      // 缓冲被清空/挤出/重启: 清空列表, 下次轮询从 0 全量重载
+      list.innerHTML = '';
+      logLastId = 0;
+      return;
+    }
+    data.logs.forEach(log => {
+      // cat 白名单化（防 class 属性注入 XSS）; msg 必须 escapeHtml 后插入
+      const cls = CATS.includes(log.cat) ? log.cat : 'INFO';
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      line.innerHTML = '<span class="cat-' + cls + '">[' + escapeHtml(log.ts) + '] [' +
+        escapeHtml(log.cat) + '] ' + escapeHtml(log.msg) + '</span>';
+      list.appendChild(line);
+    });
+    if (data.logs.length > 0) {
+      logLastId = data.next_id;
+      if (document.getElementById('logAutoScroll').checked) {
+        list.scrollTop = list.scrollHeight;
+      }
+    }
+  } catch (e) {
+    // 轮询失败静默, 下个周期重试
+  }
+}
+setInterval(pollLogs, 1000);
+
+document.getElementById('logPauseBtn').addEventListener('click', function() {
+  logPaused = !logPaused;
+  this.textContent = logPaused ? '继续' : '暂停';
+});
+document.getElementById('logClearBtn').addEventListener('click', async function() {
+  try {
+    await fetch('/api/logs/clear', { method: 'POST' });
+  } catch (e) { /* 忽略 */ }
+  document.getElementById('logList').innerHTML = '';
+  logLastId = 0;
+});
+
+// ─── 更多设置 tab（控件持久化 + 黑名单管理）───────────────────────
+const settingThumbSize = document.getElementById('settingThumbSize');
+const settingThumbSizeVal = document.getElementById('settingThumbSizeVal');
+const settingPreviewDelay = document.getElementById('settingPreviewDelay');
+const settingPixivInterval = document.getElementById('settingPixivInterval');
+const settingMaxRows = document.getElementById('settingMaxRows');
+
+function fillSettingsControls() {
+  const cfg = globalConfig || {};
+  settingThumbSize.value = cfg.thumbnailSize != null ? cfg.thumbnailSize : 48;
+  settingThumbSizeVal.textContent = settingThumbSize.value;
+  settingPreviewDelay.value = cfg.previewDelay != null ? cfg.previewDelay : 500;
+  settingPixivInterval.value = cfg.pixivInterval != null ? cfg.pixivInterval : 0.8;
+  settingMaxRows.value = cfg.maxRows != null ? cfg.maxRows : 1000;
+}
+
+// 缩略图滑块: 实时写 --thumb-size, blur/change 时保存
+settingThumbSize.addEventListener('input', function() {
+  const v = this.value;
+  settingThumbSizeVal.textContent = v;
+  document.documentElement.style.setProperty('--thumb-size', v + 'px');
+});
+[settingThumbSize, settingPreviewDelay, settingPixivInterval, settingMaxRows].forEach(el => {
+  el.addEventListener('blur', saveConfig);
+  el.addEventListener('change', saveConfig);
+});
+
+// 黑名单管理
+const blacklistList = document.getElementById('blacklistList');
+
+function setBlacklistMsg(text, type) {
+  const m = document.getElementById('blacklistMsg');
+  m.className = 'input-badge' + (type ? ' ' + type : '');
+  m.textContent = text || '';
+}
+
+async function loadBlacklistUI() {
+  try {
+    const res = await fetch('/api/blacklist');
+    const data = await res.json();
+    const ids = data.ids || [];
+    if (ids.length === 0) {
+      blacklistList.innerHTML = '<div style="color:#484f58;font-size:13px;padding:8px 0">黑名单为空</div>';
+      return;
+    }
+    blacklistList.innerHTML = ids.map(id =>
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #21262d;font-family:monospace;font-size:13px">' +
+      '<span>' + escapeHtml(id) + '</span>' +
+      '<button class="btn btn-danger" style="padding:4px 12px;font-size:12px" data-remove="' + escapeHtml(id) + '">删除</button>' +
+      '</div>'
+    ).join('');
+    blacklistList.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', async function() {
+        try {
+          await fetch('/api/blacklist/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: this.dataset.remove })
+          });
+        } catch (e) { /* 忽略 */ }
+        loadBlacklistUI();
+      });
+    });
+  } catch (e) { /* 忽略 */ }
+}
+
+document.getElementById('blacklistAddBtn').addEventListener('click', async function() {
+  const input = document.getElementById('blacklistInput');
+  const raw = input.value.trim();
+  if (!raw) { setBlacklistMsg('请输入作品 ID 或链接'); return; }
+  try {
+    const res = await fetch('/api/blacklist/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: raw })
+    });
+    const data = await res.json();
+    if (data.error) {
+      setBlacklistMsg('添加失败: ' + data.error, 'error');
+      return;
+    }
+    input.value = '';
+    setBlacklistMsg('已添加', 'success');
+    loadBlacklistUI();
+  } catch (e) { /* 忽略 */ }
+});
+
+document.getElementById('blacklistClearBtn').addEventListener('click', async function() {
+  try {
+    await fetch('/api/blacklist/clear', { method: 'POST' });
+  } catch (e) { /* 忽略 */ }
+  setBlacklistMsg('已清空', 'success');
+  loadBlacklistUI();
+});
+
 // ─── Config blur save ──────────────────────────────────────────
 urlA.addEventListener('blur', saveConfig);
 urlB.addEventListener('blur', saveConfig);
 document.getElementById('pixivUid').addEventListener('blur', saveConfig);
 document.getElementById('pixivPhpsessid').addEventListener('blur', saveConfig);
 document.getElementById('pixivPath').addEventListener('blur', saveConfig);
+document.getElementById('pixivLimit').addEventListener('blur', saveConfig);
 
 // 加载配置文件
 loadConfig();
+loadBlacklistUI();
 </script>
 </body>
 </html>"""
