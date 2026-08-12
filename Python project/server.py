@@ -614,6 +614,7 @@ ADDR_INPUTS.forEach(item => {
   const el = item.el;
   if (!el) return;
   el.addEventListener('input', function() {
+    if ((el === urlA || el === urlB) && !el.value.trim()) { showEmptyState(); }
     clearTimeout(badgeTimers[item.badge]);
     badgeTimers[item.badge] = setTimeout(() => {
       setBadge(item.badge, detectAddressType(el.value.trim()));
@@ -684,6 +685,13 @@ function showProgress(show) {
   progressWrap.classList.toggle('active', show);
 }
 
+// 恢复空态提示并隐藏结果区与同步按钮（扫描失败 / 输入清空时调用）
+function showEmptyState() {
+  emptyState.classList.remove('hidden');
+  resultSection.classList.add('hidden');
+  syncBtn.classList.add('hidden');
+}
+
 function setProgress(pct, text) {
   progressFill.style.width = pct + '%';
   progressText.textContent = text;
@@ -695,6 +703,7 @@ async function doScan() {
   if (!u1 || !u2) { setStatus('请填写两台设备的链接或路径', 'error'); return; }
 
   scanBtn.disabled = true;
+  emptyState.classList.add('hidden');
   setStatus('正在扫描设备 A...', 'loading');
   showProgress(true);
   setProgress(20, '正在扫描设备 A...');
@@ -712,8 +721,8 @@ async function doScan() {
     const data1 = await res1.json();
     const data2 = await res2.json();
 
-    if (data1.error) { setStatus('设备 A 连接失败: ' + data1.error, 'error'); syncBtn.classList.add('hidden'); scanBtn.disabled = false; showProgress(false); return; }
-    if (data2.error) { setStatus('设备 B 连接失败: ' + data2.error, 'error'); syncBtn.classList.add('hidden'); scanBtn.disabled = false; showProgress(false); return; }
+    if (data1.error) { setStatus('设备 A 连接失败: ' + data1.error, 'error'); showEmptyState(); scanBtn.disabled = false; showProgress(false); return; }
+    if (data2.error) { setStatus('设备 B 连接失败: ' + data2.error, 'error'); showEmptyState(); scanBtn.disabled = false; showProgress(false); return; }
 
     loadedFilesA = data1.files || [];
     loadedFilesB = data2.files || [];
@@ -755,6 +764,7 @@ async function doScan() {
     }
   } catch (e) {
     setStatus('扫描出错: ' + e.message, 'error');
+    showEmptyState();
     showProgress(false);
   }
   scanBtn.disabled = false;
