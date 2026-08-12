@@ -23,8 +23,8 @@ Thumbs.db
 *.log
 
 # config
-config.ini
-blacklist.csv
+Python project/config.ini
+Python project/blacklist.csv
 
 # opencode
 .omo/
