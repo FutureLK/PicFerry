@@ -5,7 +5,10 @@
 
 import http.server
 import json
+import ctypes
+import platform
 import urllib.request
+import urllib.error
 import urllib.parse
 import ftplib
 import hashlib
@@ -17,10 +20,14 @@ import os
 import sys
 import signal
 import datetime
+import threading
 import time
 import mimetypes
+import collections
 import configparser
 import itertools
+import logging
+import logging.handlers
 
 PORT = 13826
 IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
@@ -46,12 +53,15 @@ _CONFIG_KEYS = {
     'pixivInterval':  (0.8,  0.1,   10,     'float'),  # s
     'pixivLimit':     (0,    0,     100000, 'int'),    # 0=全部
     'maxRows':        (1000, 10,    5000,   'int'),    # 行数上限
+    'allowLan': (0, 0, 1, 'bool'),    # 0=仅本机 1=局域网
 }
 
 def _parse_config_value(key, raw):
     """解析配置值: 空串/非数字回落默认值, 越界钳制; 返回规范类型"""
     default, lo, hi, vtype = _CONFIG_KEYS[key]
     try:
+        if vtype == 'bool':
+            return str(raw).strip().lower() in ('1', 'true', 'yes', 'on')
         if vtype == 'float':
             val = float(str(raw).strip())
         else:
@@ -61,30 +71,43 @@ def _parse_config_value(key, raw):
         return default
 
 def load_config():
-    cfg = configparser.ConfigParser()
-    cfg.read(CONFIG_PATH, encoding='utf-8')
-    conf = {
-        'dev1ceA': cfg.get('Settings', 'dev1ceA', fallback=''),
-        'dev1ceB': cfg.get('Settings', 'dev1ceB', fallback=''),
-        'PixivUID': cfg.get('Settings', 'PixivUID', fallback=''),
-        'PHPSESSID': cfg.get('Settings', 'PHPSESSID', fallback=''),
-        'PixivL': cfg.get('Settings', 'PixivL', fallback=''),
-    }
-    for key in _CONFIG_KEYS:
-        conf[key] = _parse_config_value(key, cfg.get('Settings', key, fallback=''))
-    return conf
+    """读取配置; 解析失败(损坏/缺段/BOM)时回落全默认值, 不抛出"""
+    try:
+        cfg = configparser.ConfigParser()
+        cfg.read(CONFIG_PATH, encoding='utf-8')
+        conf = {
+            'dev1ceA': cfg.get('Settings', 'dev1ceA', fallback=''),
+            'dev1ceB': cfg.get('Settings', 'dev1ceB', fallback=''),
+            'PixivUID': cfg.get('Settings', 'PixivUID', fallback=''),
+            'PHPSESSID': cfg.get('Settings', 'PHPSESSID', fallback=''),
+            'PixivL': cfg.get('Settings', 'PixivL', fallback=''),
+        }
+        for key in _CONFIG_KEYS:
+            conf[key] = _parse_config_value(key, cfg.get('Settings', key, fallback=''))
+        return conf
+    except (configparser.Error, OSError) as e:
+        console_log('ERROR', f'配置读取失败，使用默认值: {e}')
+        conf = {'dev1ceA': '', 'dev1ceB': '', 'PixivUID': '', 'PHPSESSID': '', 'PixivL': ''}
+        for key in _CONFIG_KEYS:
+            default = _CONFIG_KEYS[key][0]
+            conf[key] = _parse_config_value(key, default)
+        return conf
 
 def save_config(data: dict):
+    current = load_config()
     keys = ['dev1ceA', 'dev1ceB', 'PixivUID', 'PHPSESSID', 'PixivL'] + list(_CONFIG_KEYS.keys())
     lines = ['[Settings]\n']
     for k in keys:
-        if k in _CONFIG_KEYS:
+        if k not in data:
+            v = current.get(k, '')
+        elif k in _CONFIG_KEYS:
             default, _, _, _ = _CONFIG_KEYS[k]
             v = _parse_config_value(k, data.get(k, default))
-            lines.append(f'{k} = {v}\n')
         else:
             v = data.get(k, '')
-            lines.append(f'{k} = {v}\n')
+        if k in _CONFIG_KEYS and _CONFIG_KEYS[k][3] == 'bool':
+            v = 1 if v else 0
+        lines.append(f'{k} = {v}\n')
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         f.writelines(lines)
 
@@ -97,41 +120,48 @@ LOG_COLORS = {
     'IMAGE': '\033[90m',   # grey
     'DONE': '\033[92m',    # green
     'ERROR': '\033[91m',   # red
+    'BLACKLIST': '\033[95m',
 }
 RESET = '\033[0m'
 
 # ─── 内存日志环形缓冲（供网页日志面板轮询）─────────────────────────────────
-import collections
-import threading
-
 LOG_BUFFER = collections.deque(maxlen=500)
 LOG_SEQ = itertools.count(1)   # 单调 id; 进程存活期内不回退, 清空不重置
 LOG_LAST_ID = 0                # 已发出的最大 id（itertools.count 不可回读, 单独维护）
 LOG_LOCK = threading.Lock()
 
+# M6: sync.log 常驻句柄 + 5MB×3 轮转（处理器自带锁, 多线程写/轮转安全）
+_log_file_handler = None
+try:
+    _log_file_handler = logging.handlers.RotatingFileHandler(
+        os.path.join(runtime_dir(), 'sync.log'),
+        maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8')
+    _log_file_handler.setFormatter(logging.Formatter('%(message)s'))
+except Exception:
+    _log_file_handler = None
+
 # 检测终端是否支持 ANSI 颜色（Windows 旧终端可能不支持）
 _USE_COLOR = True
-try:
-    import platform
-    if platform.system() == 'Windows':
+if platform.system() == 'Windows':
+    try:
+        k32 = ctypes.windll.kernel32
+        h = k32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if k32.GetConsoleMode(h, ctypes.byref(mode)):
+            k32.SetConsoleMode(h, mode.value | 0x0004)  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+    except Exception:
         ver = platform.version().split('.')
-        major = int(ver[0]) if ver else 0
-        if major < 10:
-            _USE_COLOR = False
-except:
-    pass
+        _USE_COLOR = False if ver and int(ver[0]) < 10 else _USE_COLOR
 
 def console_log(category, message):
     ts = datetime.datetime.now().strftime('%H:%M:%S')
     line = f'[{ts}] [{category}] {message}'
 
     # 写日志文件（EXE 所在目录）
-    try:
-        log_dir = runtime_dir()
-        with open(os.path.join(log_dir, 'sync.log'), 'a', encoding='utf-8') as f:
-            f.write(f'{line}\n')
-    except:
-        pass
+    if _log_file_handler is not None:
+        try:
+            _log_file_handler.handle(logging.LogRecord('sync', logging.INFO, '', 0, line, None, None))
+        except Exception: pass  # 日志写入失败不影响主流程
 
     # 写控制台 stderr（比 stdout 更可靠，在 PyInstaller 下也不会被吞）
     try:
@@ -141,8 +171,7 @@ def console_log(category, message):
         else:
             sys.stderr.write(f' {line}\n')
         sys.stderr.flush()
-    except:
-        pass
+    except Exception: pass
 
     # 写内存环形缓冲（供网页日志面板增量轮询）; 存原始分类与消息, 不含 ANSI
     try:
@@ -151,8 +180,7 @@ def console_log(category, message):
         with LOG_LOCK:
             LOG_LAST_ID = log_id
             LOG_BUFFER.append((log_id, ts, category, message))
-    except:
-        pass
+    except Exception: pass
 
 # ─── Embedded HTML ───────────────────────────────────────────────────────────
 
@@ -240,7 +268,6 @@ input[type="checkbox"]{accent-color:#58a6ff;cursor:pointer}
 /* ─── Thumbnail ─── */
 .thumb-wrap{width:var(--thumb-size,48px);height:var(--thumb-size,48px);flex-shrink:0}
 .thumb{width:var(--thumb-size,48px);height:var(--thumb-size,48px);object-fit:cover;border-radius:4px;display:block;background:#0d1117}
-.thumb-placeholder{width:48px;height:48px;border-radius:4px;background:#21262d;display:flex;align-items:center;justify-content:center;font-size:16px;color:#484f58}
 /* ─── Preview panel ─── */
 .preview-panel{display:none;position:fixed;z-index:1000;background:#161b22;border:1px solid #30363d;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);overflow:hidden;pointer-events:none;max-width:420px}
 .preview-panel.active{display:block}
@@ -248,14 +275,9 @@ input[type="checkbox"]{accent-color:#58a6ff;cursor:pointer}
 .preview-panel .preview-name{padding:8px 12px;font-size:12px;color:#8b949e;border-top:1px solid #30363d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* ─── Animations ─── */
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
-@keyframes fillBar{from{width:0%}to{width:var(--target)}}
 .fade-in{animation:fadeIn .35s ease-out both}
-.pulse{animation:pulse 2s ease-in-out infinite}
-.slide-down{animation:slideDown .3s ease-out forwards}
 #syncBtn.slide-in{animation:slideDown .3s ease-out}
-.fill-bar{animation:fillBar .6s ease-out forwards}
 tr.row-enter{animation:fadeIn .35s ease-out both}
 /* ─── Help tooltips ─── */
 .help-toggle{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#30363d;color:#8b949e;font-size:11px;cursor:pointer;margin-left:4px;transition:all .2s;vertical-align:middle;line-height:18px;font-style:normal;font-weight:600}
@@ -279,6 +301,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
 .log-line .cat-DONE{color:#3fb950}
 .log-line .cat-ERROR{color:#f85149}
 .log-line .cat-INFO{color:#c9d1d9}
+.log-line .cat-BLACKLIST{color:#bc8cff}
 </style>
 </head>
 <body>
@@ -372,7 +395,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
         PHPSESSID
         <span class="help-toggle" data-target="helpPhpsessid">?</span>
       </label>
-      <input type="password" id="pixivPhpsessid" placeholder="浏览器 Cookie 中的 PHPSESSID 值（字母数字）">
+      <input type="password" id="pixivPhpsessid" placeholder="已保存的凭证已隐藏，留空则使用已保存凭证（清空请手动编辑 config.ini）">
       <div id="helpPhpsessid" class="help-text hidden">
         <strong>如何获取 PHPSESSID：</strong>
         <ol>
@@ -546,7 +569,6 @@ async function loadConfig() {
     if (cfg.dev1ceA) urlA.value = cfg.dev1ceA;
     if (cfg.dev1ceB) urlB.value = cfg.dev1ceB;
     if (cfg.PixivUID) document.getElementById('pixivUid').value = cfg.PixivUID;
-    if (cfg.PHPSESSID) document.getElementById('pixivPhpsessid').value = cfg.PHPSESSID;
     if (cfg.PixivL) document.getElementById('pixivPath').value = cfg.PixivL;
     if (cfg.pixivLimit != null) document.getElementById('pixivLimit').value = cfg.pixivLimit;
     // 缩略图尺寸联动: CSS 变量 --thumb-size
@@ -556,6 +578,7 @@ async function loadConfig() {
     fillSettingsControls();
   } catch (e) {
     // config 文件不存在或解析失败，静默忽略
+    fillSettingsControls();
   }
 }
 
@@ -564,7 +587,6 @@ async function saveConfig() {
     dev1ceA: urlA.value.trim(),
     dev1ceB: urlB.value.trim(),
     PixivUID: document.getElementById('pixivUid').value.trim(),
-    PHPSESSID: document.getElementById('pixivPhpsessid').value.trim(),
     PixivL: document.getElementById('pixivPath').value.trim(),
     pixivLimit: document.getElementById('pixivLimit').value.trim(),
     thumbnailSize: settingThumbSize.value,
@@ -572,6 +594,8 @@ async function saveConfig() {
     pixivInterval: settingPixivInterval.value,
     maxRows: settingMaxRows.value,
   };
+  const _p = document.getElementById('pixivPhpsessid').value.trim();
+  if (_p) data.PHPSESSID = _p;
   try {
     await fetch('/api/config/save', {
       method: 'POST',
@@ -671,11 +695,11 @@ dirBtns.forEach(btn => {
 });
 
 function logToServer(cat, msg) {
-  fetch('/api/log?cat=' + encodeURIComponent(cat) + '&msg=' + encodeURIComponent(msg), { method: 'POST' });
+  fetch('/api/log?cat=' + encodeURIComponent(cat) + '&msg=' + encodeURIComponent(msg), { method: 'POST' }).catch(() => {});
 }
 
 function setStatus(msg, type) {
-  statusEl.innerHTML = msg;
+  statusEl.textContent = msg;
   statusEl.className = 'status' + (type ? ' ' + type : '');
 }
 
@@ -801,9 +825,11 @@ function runDedup() {
 }
 
 function renderTable() {
+  const RENDER_LIMIT = parseInt((globalConfig || {}).maxRows) || 1000;
   let html = '';
   const srcUrl = scanDir === 'ab' ? urlB.value.trim() : urlA.value.trim();
   currentFiles.forEach((f, i) => {
+    if (i >= RENDER_LIMIT) return;
     const sizeStr = f.size != null ? formatSize(f.size) : '-';
     const delay = Math.min(i * 30, 300);
     const thumbUrl = srcUrl ? '/api/image?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name) : '';
@@ -818,6 +844,8 @@ function renderTable() {
     html += '<td class="file-hash' + (hashToggle.checked ? '' : ' hidden') + '">' + (f.hash || '-') + '</td>';
     html += '</tr>';
   });
+  if (currentFiles.length > RENDER_LIMIT) { html += '<tr><td colspan="6" style="padding:10px;text-align:center;color:#8b949e">仅显示前 ' + RENDER_LIMIT + ' 行（共 ' + currentFiles.length + ' 个文件，同步不受影响）</td></tr>'; }
+  thumbObserver.disconnect();
   fileList.innerHTML = html;
 
   hashTh.classList.toggle('hidden', !hashToggle.checked);
@@ -880,11 +908,12 @@ function bindPreviewHover() {
         previewImg.src = '/api/image?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name);
         previewName.textContent = f.name + (f.size != null ? ' (' + formatSize(f.size) + ')' : '');
         previewPanel.classList.add('active');
+        const panelH = previewPanel.offsetHeight || 480;
 
         // Position: below the link, or above if near bottom
         let top = rect.bottom + 8;
-        if (top + 520 > window.innerHeight) {
-          top = rect.top - 8 - 520;
+        if (top + panelH > window.innerHeight) {
+          top = rect.top - 8 - panelH;
         }
         let left = Math.min(rect.left, window.innerWidth - 420);
         previewPanel.style.top = Math.max(8, top) + 'px';
@@ -1025,7 +1054,7 @@ async function doFetchBookmarks() {
   const path = document.getElementById('pixivPath').value.trim();
   const limitRaw = document.getElementById('pixivLimit').value.trim();
 
-  if (!uid || !phpsessid) { setPixivStatus('请填写 Pixiv UID 和 PHPSESSID', 'error'); return; }
+  if (!uid) { setPixivStatus('请填写 Pixiv UID', 'error'); return; }
   if (!path) { setPixivStatus('请填写本地文件夹路径', 'error'); return; }
 
   let limit = 0;
@@ -1166,7 +1195,7 @@ syncBtn.addEventListener('click', doSync);
 // ─── 日志面板（轮询 /api/logs; 六色映射; 自动滚动/暂停/清空）─────────
 let logLastId = 0;
 let logPaused = false;
-const CATS = ['SCAN', 'HASH', 'SYNC', 'IMAGE', 'DONE', 'ERROR'];
+const CATS = ['SCAN', 'HASH', 'SYNC', 'IMAGE', 'DONE', 'ERROR', 'BLACKLIST'];
 
 async function pollLogs() {
   if (logPaused) return;
@@ -1384,19 +1413,24 @@ def ftp_list(url):
                 names = ftp.nlst()
                 for name in names:
                     if name not in ('.', '..'):
-                        result.append({'name': name, 'size': 0})
+                        sz = 0
+                        try:
+                            sz = int(ftp.size(name))
+                        except Exception:
+                            sz = 0
+                        result.append({'name': name, 'size': sz})
             except ftplib.error_perm:
                 lines = []
                 ftp.dir(lines.append)
                 for line in lines:
-                    parts = line.split()
-                    if len(parts) >= 9 and not parts[-1].startswith('.'):
-                        result.append({'name': parts[-1], 'size': 0})
+                    parts = line.split(None, 8)
+                    if len(parts) >= 9 and not parts[8].startswith('.'):
+                        result.append({'name': parts[8], 'size': 0})
     finally:
         try:
             ftp.quit()
-        except:
-            pass
+        except Exception as e:
+            console_log('ERROR', f'FTP 断开清理失败: {e}')
     return result
 
 def ftp_download(url, filename):
@@ -1412,8 +1446,8 @@ def ftp_download(url, filename):
     finally:
         try:
             ftp.quit()
-        except:
-            pass
+        except Exception as e:
+            console_log('ERROR', f'FTP 断开清理失败: {e}')
 
 def ftp_upload(url, filename, data):
     info = parse_ftp_info(url)
@@ -1426,14 +1460,14 @@ def ftp_upload(url, filename, data):
     finally:
         try:
             ftp.quit()
-        except:
-            pass
+        except Exception as e:
+            console_log('ERROR', f'FTP 断开清理失败: {e}')
 
 # ─── Directory listing parser (HTTP HTML) ────────────────────────────────────
 
 def parse_html_listing(html):
     files = []
-    pattern = re.compile(r'<a\s+href="([^"]*)"[^>]*>([^<]*)</a>', re.IGNORECASE)
+    pattern = re.compile(r'<a\s+href="([^"]*)"[^>]*>([^<]*)</a>([^\n]*)', re.IGNORECASE)
     for match in pattern.finditer(html):
         href = match.group(1).strip()
         text = match.group(2).strip()
@@ -1442,7 +1476,16 @@ def parse_html_listing(html):
         name = text or href
         ext = os.path.splitext(name)[1].lower()
         if ext in IMAGE_EXTS:
-            files.append({'name': name, 'size': 0})
+            size = 0
+            size_matches = re.findall(
+                r'(\d+(?:\.\d+)?)\s*(B|KB|MB|GB)\b',
+                match.group(2) + match.group(3), re.IGNORECASE)
+            if size_matches:
+                num = float(size_matches[-1][0])
+                unit = size_matches[-1][1].upper()
+                multiplier = {'B': 1, 'KB': 1024, 'MB': 1048576, 'GB': 1073741824}[unit]
+                size = int(round(num * multiplier))
+            files.append({'name': name, 'size': size})
     return files
 
 # ─── Local directory scanner ─────────────────────────────────────────────────
@@ -1451,9 +1494,9 @@ def is_local_path(path):
     """检测是否为本地磁盘路径"""
     if path.lower().startswith('file:///'):
         return True
-    if re.match(r'^[a-zA-Z]:[\\/]', path):
+    if path.lower().startswith('file:'):
         return True
-    if re.match(r'^[a-zA-Z]:\\', path):
+    if re.match(r'^[a-zA-Z]:[\\/]', path):
         return True
     return False
 
@@ -1463,6 +1506,11 @@ def strip_file_prefix(path):
         return path[8:]  # file:///C:/ → C:/
     if path.lower().startswith('file://'):
         return path[7:]
+    if path.lower().startswith('file:'):
+        p = path[5:]
+        if len(p) >= 3 and p[0] in '/\\' and p[1:2].isalpha() and p[2] == ':':
+            p = p[1:]
+        return p
     return path
 
 def local_list(path):
@@ -1477,7 +1525,8 @@ def local_list(path):
                     full = os.path.join(root, name)
                     try:
                         size = os.path.getsize(full)
-                    except:
+                    except Exception as e:
+                        console_log('ERROR', f'读取文件大小失败: {full} - {e}')
                         size = 0
                     # 相对于扫描目录的路径
                     rel = os.path.relpath(full, path)
@@ -1487,13 +1536,68 @@ def local_list(path):
         raise
     return files
 
+# ─── 本地路径参数净化 (H2c) ─────────────────────────────────────────────────
+
+def _safe_error_text(e):
+    """脱敏错误文案: 剥离引号包裹的本地/UNC/file: 路径（防布局泄露），保留异常原因，截断 120 字符"""
+    s = str(e)
+    s = re.sub(r"file:(//)?/?", '', s, flags=re.IGNORECASE)          # 先剥 file: 前缀（覆盖 file:///、file://、file:/）
+    s = re.sub(r"[\"'](([A-Za-z]:[\\/])|(\\\\|//))[^\"']*[\"']", '<路径>', s)
+    return s[:120]
+
+def _sanitize_rel_path(name):
+    """拒绝绝对路径、盘符、`..` 组件、尾部空格/点的组件、Windows 保留设备名; 允许相对子目录（local_list 产出 rel 路径）"""
+    if not isinstance(name, str) or not name:
+        raise ValueError('非法文件名')
+    if os.path.isabs(name) or re.match(r'^[a-zA-Z]:', name):
+        raise ValueError('非法文件名')
+    _reserved = {'CON', 'PRN', 'AUX', 'NUL'} | {f'COM{i}' for i in range(1, 10)} | {f'LPT{i}' for i in range(1, 10)}
+    for part in name.replace('\\', '/').split('/'):
+        if part == '..' or part.rstrip(' .') == '..':
+            raise ValueError('非法文件名')
+        if part != part.rstrip(' .'):
+            raise ValueError('非法文件名')          # Win32 去尾空格/点 → 路径规范化绕过
+        if part.split('.', 1)[0].rstrip(' .').upper() in _reserved:
+            raise ValueError('非法文件名')          # NUL/CON/COM1 等设备名（rstrip 先剥尾空格/点，防 `con .txt` 穿透）
+    return name
+
+def _declared_local_bases():
+    """config 声明的本地路径基座（dev1ceA/dev1ceB/PixivL 中属于本地路径者）; normcase+realpath 规范化"""
+    conf = load_config()
+    bases = []
+    for key in ('dev1ceA', 'dev1ceB', 'PixivL'):
+        p = conf.get(key, '')
+        if p and is_local_path(p):
+            bases.append(os.path.realpath(os.path.normcase(os.path.normpath(strip_file_prefix(p)))))
+    return bases
+
+def _check_local_base(base):
+    """本地读/写基座必须位于 config 声明设备路径之下（防 url/from/to 不受限的任意文件读写链）;
+    normcase 处理 Windows 大小写不敏感; realpath 处理 junction/symlink 逃逸"""
+    b = os.path.realpath(os.path.normcase(os.path.normpath(base)))
+    for declared in _declared_local_bases():
+        if b == declared or b.startswith(declared + os.sep):
+            return
+    raise ValueError('未声明的本地路径')
+
+def _check_realpath_within(base, full):
+    """最终读写路径的 realpath 必须仍在声明基座内（防基座内 junction 指向外部后越界读写）;
+    normcase 与 _check_local_base 口径一致（Windows 大小写不敏感）"""
+    rb = os.path.realpath(os.path.normcase(os.path.normpath(base)))
+    rf = os.path.realpath(full)
+    if rf != rb and not rf.startswith(rb + os.sep):
+        raise ValueError('路径越出声明基座')
+
 # ─── HTTP Request Handler ────────────────────────────────────────────────────
 
 def _read_remote_file(url, filename):
     """通用远程文件读取，支持 HTTP、FTP、本地路径"""
+    filename = _sanitize_rel_path(filename)
     if is_local_path(url):
         base = strip_file_prefix(url)
+        _check_local_base(base)
         full = os.path.join(base, filename)
+        _check_realpath_within(base, full)
         with open(full, 'rb') as f:
             return f.read()
     elif is_ftp(url):
@@ -1530,7 +1634,7 @@ def _read_remote_file(url, filename):
 #
 # [GET] /api/pixiv/job/result
 #   描述: 取终态结果（仅 done 时有数据）
-#   成功响应: { "matched": [{name, size, illust_id, page, pageCount}, ...] }
+#   成功响应: { "matched": [{illust_id, pageCount, saved_pages, missing_pages, range}, ...] }
 #
 # 查重语义: 本地文件名 ^(\d+)_p(\d+) 提取 (illust_id, page);
 #   page < 书签 pageCount 判定该分p已收藏（0-indexed）; 无 _pN 后缀按 page 0。
@@ -1580,7 +1684,7 @@ def load_blacklist():
 
 
 def save_blacklist(ids):
-    """原子写: 临时文件 + os.replace, 避免并发读看到半写文件"""
+    """原子写: 临时文件 + os.replace, 避免并发读看到半写文件; 返回是否成功"""
     with BLACKLIST_LOCK:
         tmp = BLACKLIST_PATH + '.tmp'
         try:
@@ -1589,11 +1693,13 @@ def save_blacklist(ids):
                 for i in sorted(ids):
                     f.write(i + '\n')
             os.replace(tmp, BLACKLIST_PATH)
+            return True
         except OSError:
             try:
                 os.remove(tmp)
             except OSError:
                 pass
+            return False
 
 
 def normalize_illust_id(raw):
@@ -1677,6 +1783,14 @@ def fetch_all_pixiv_bookmark_ids(uid, phpsessid, limit=0, stop_event=None, black
             batch = filter_blacklisted(batch, blacklist)
             skipped_total += before - len(batch)
 
+            # limit 预算: 非黑名单累计数达标即停（页内截断, 提前返回）
+            if limit and limit > 0:
+                remaining = limit - len(bookmarks)
+                if remaining <= 0:
+                    return bookmarks
+                if len(batch) > remaining:
+                    batch = dict(list(batch.items())[:remaining])
+
             for wid, page_count in batch.items():
                 if wid not in bookmarks:
                     bookmarks[wid] = page_count
@@ -1685,10 +1799,6 @@ def fetch_all_pixiv_bookmark_ids(uid, phpsessid, limit=0, stop_event=None, black
             skip_note = f' 黑名单跳过{skipped_total}' if skipped_total else ''
             console_log('SCAN', f'Pixiv({visibility}): {len(bookmarks)}/{stream_total} 请求{request_count}次{skip_note}')
             update_progress()
-
-            # limit 预算: 非黑名单累计数达标即停
-            if limit and limit > 0 and len(bookmarks) >= limit:
-                return bookmarks
 
             offset += page_size
             if offset >= stream_total:
@@ -1771,7 +1881,14 @@ def run_pixiv_job(uid, phpsessid, path, limit=0, fetch_fn=fetch_all_pixiv_bookma
         # ── fetching ──
         set_state(status='fetching', error=None, summary=None, result=None,
                   progress={'phase': 'fetching', 'fetched': 0, 'total': 0})
-        bookmarks = fetch_fn(uid, phpsessid, limit, pixiv_job['stop'], blacklist, interval)
+        try:
+            bookmarks = fetch_fn(uid, phpsessid, limit, pixiv_job['stop'], blacklist, interval)
+        except urllib.error.HTTPError as e:
+            if e.code == 403:
+                raise RuntimeError('Pixiv 认证失败，请检查 PHPSESSID 是否有效或已过期') from e
+            if e.code == 404:
+                raise RuntimeError('Pixiv 用户不存在，请检查 UID') from e
+            raise RuntimeError(f'HTTP {e.code}') from e
         if pixiv_job['stop'].is_set():          # 先查 stop, 再处理结果 —— 顺序不可颠倒
             set_state(status='stopped')
             return
@@ -1792,7 +1909,7 @@ def run_pixiv_job(uid, phpsessid, path, limit=0, fetch_fn=fetch_all_pixiv_bookma
         if pixiv_job['stop'].is_set():
             set_state(status='stopped')
             return
-        set_state(status='matching', progress={'phase': 'matching', 'fetched': 0, 'total': len(local_files)})
+        set_state(status='matching', progress={'phase': 'matching', 'fetched': 0, 'total': len(bookmarks)})
         saved = {}
         for f in local_files:
             if pixiv_job['stop'].is_set():
@@ -1833,15 +1950,6 @@ def run_pixiv_job(uid, phpsessid, path, limit=0, fetch_fn=fetch_all_pixiv_bookma
                            'missing_works': missing_works_total,
                            'missing_pages': missing_pages_total},
                   result=missing)
-    except urllib.error.HTTPError as e:
-        if e.code == 403:
-            msg = 'Pixiv 认证失败，请检查 PHPSESSID 是否有效或已过期'
-        elif e.code == 404:
-            msg = 'Pixiv 用户不存在，请检查 UID'
-        else:
-            msg = f'HTTP {e.code}'
-        console_log('ERROR', f'Pixiv 查重失败: {msg}')
-        set_state(status='error', error=msg)
     except Exception as e:
         console_log('ERROR', f'Pixiv 查重失败: {e}')
         set_state(status='error', error=str(e))
@@ -1866,6 +1974,7 @@ def _start_pixiv_job(uid, phpsessid, path, limit=0):
 
 
 class SyncHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
 
     def log_message(self, format, *args):
         pass  # suppress default logging
@@ -1874,33 +1983,62 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
         body = json.dumps(data, ensure_ascii=False).encode('utf-8')
         self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
-        self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Cache-Control', 'no-cache')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
     def _send_html(self):
+        body = HTML.encode('utf-8')
         self.send_response(200)
         self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(HTML.encode('utf-8'))
+        self.wfile.write(body)
 
     def _send_error(self, code=404, msg='Not Found'):
+        body = msg.encode('utf-8')
         self.send_response(code)
         self.send_header('Content-Type', 'text/plain; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
-        self.wfile.write(msg.encode('utf-8'))
+        self.wfile.write(body)
+
+    def _check_origin(self):
+        """同源校验: Origin/Referer 与 Host 不一致即拒绝（防浏览器跨站调用）;
+        allowLan=0 时另校验 Host 主机名 ∈ {127.0.0.1, localhost, ::1}（防 DNS rebinding）;
+        主机名解析用 urlsplit（正确处理 IPv6 方括号），并小写化、去尾点（Host 大小写/尾点 FQDN 不敏感）;
+        无 Origin/Referer 的本地/命令行客户端放行"""
+        host = self.headers.get('Host', '')
+        if not load_config().get('allowLan'):
+            hostname = (urllib.parse.urlsplit('//' + host).hostname or '').lower().rstrip('.')
+            if hostname not in ('127.0.0.1', 'localhost', '::1'):
+                return False
+        origin = self.headers.get('Origin')
+        if origin and origin.lower() not in (f'http://{host}'.lower(), f'https://{host}'.lower()):
+            return False
+        referer = self.headers.get('Referer')
+        if referer:
+            ref_host = urllib.parse.urlparse(referer).netloc.lower()
+            if ref_host and ref_host != host.lower():
+                return False
+        return True
 
     def do_OPTIONS(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path.startswith('/api/') and not self._check_origin():
+            self._send_error(403, 'Forbidden')
+            return
         self.send_response(204)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', '*')
         self.end_headers()
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
+
+        if parsed.path.startswith('/api/') and not self._check_origin():
+            self._send_error(403, 'Forbidden')
+            return
 
         if parsed.path == '/':
             self._send_html()
@@ -1926,6 +2064,10 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         params = urllib.parse.parse_qs(parsed.query)
+
+        if parsed.path.startswith('/api/') and not self._check_origin():
+            self._send_error(403, 'Forbidden')
+            return
 
         if parsed.path == '/api/hash':
             self._handle_hash(params)
@@ -1966,17 +2108,13 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
                          if os.path.splitext(e['name'])[1].lower() in IMAGE_EXTS]
             else:
                 body, status = http_fetch(phone_url)
-                if status >= 400:
-                    console_log('ERROR', f'列表请求失败 HTTP {status}: {phone_url}')
-                    self._send_json({'error': 'HTTP ' + str(status), 'files': []})
-                    return
                 files = parse_html_listing(body)
 
             console_log('SCAN', f'成功: {len(files)} 个文件')
             self._send_json({'files': files, 'total': len(files)})
         except Exception as e:
             console_log('ERROR', f'列表请求失败: {phone_url} - {e}')
-            self._send_json({'error': str(e), 'files': []})
+            self._send_json({'error': _safe_error_text(e), 'files': []})
 
     def _handle_hash(self, params):
         phone_url = params.get('url', [None])[0]
@@ -1991,7 +2129,7 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({'filename': filename, 'sha256': h})
         except Exception as e:
             console_log('ERROR', f'哈希失败: {filename} - {e}')
-            self._send_json({'error': str(e)})
+            self._send_json({'error': _safe_error_text(e)})
 
     def _handle_copy(self, params):
         from_url = params.get('from', [None])[0]
@@ -2003,11 +2141,14 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             return
 
         try:
+            filename = _sanitize_rel_path(filename)
             data = _read_remote_file(from_url, filename)
 
             if is_local_path(to_url):
                 base = strip_file_prefix(to_url)
+                _check_local_base(base)
                 dst = os.path.join(base, filename)
+                _check_realpath_within(base, dst)
                 os.makedirs(os.path.dirname(dst), exist_ok=True)
                 with open(dst, 'wb') as f:
                     f.write(data)
@@ -2022,7 +2163,7 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({'success': True, 'filename': filename})
         except Exception as e:
             console_log('ERROR', f'同步失败: {filename} - {e}')
-            self._send_json({'success': False, 'filename': filename, 'error': str(e)})
+            self._send_json({'success': False, 'filename': filename, 'error': _safe_error_text(e)})
 
     def _handle_pixiv_bookmarks(self):
         """POST /api/pixiv/bookmarks: 同步校验 → 后台启动 Job → 立即返回。
@@ -2039,7 +2180,7 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             return
 
         uid = str(req_data.get('uid', '')).strip()
-        phpsessid = str(req_data.get('phpsessid', '')).strip()
+        phpsessid = str(req_data.get('phpsessid', '')).strip() or ('' if load_config().get('allowLan') else load_config().get('PHPSESSID', ''))
         local_path = str(req_data.get('path', '')).strip()
 
         if not uid or not phpsessid:
@@ -2050,7 +2191,7 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             return
 
         try:
-            limit = int(req_data.get('limit', load_config().get('pixivLimit', 0)))
+            limit = int(req_data['limit']) if 'limit' in req_data else load_config().get('pixivLimit', 0)
         except (TypeError, ValueError):
             limit = load_config().get('pixivLimit', 0)
 
@@ -2103,8 +2244,11 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             return
         ids = load_blacklist()
         ids.add(nid)
-        save_blacklist(ids)
-        console_log('SCAN', f'Pixiv: 黑名单添加 {nid} (共 {len(ids)} 个)')
+        if not save_blacklist(ids):
+            console_log('ERROR', '黑名单保存失败')
+            self._send_json({'ok': False, 'error': '黑名单保存失败'})
+            return
+        console_log('BLACKLIST', f'Pixiv: 黑名单添加 {nid} (共 {len(ids)} 个)')
         self._send_json({'ok': True})
 
     def _handle_blacklist_remove(self):
@@ -2125,14 +2269,20 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             return
         ids = load_blacklist()
         ids.discard(nid)
-        save_blacklist(ids)
-        console_log('SCAN', f'Pixiv: 黑名单移除 {nid} (剩 {len(ids)} 个)')
+        if not save_blacklist(ids):
+            console_log('ERROR', '黑名单保存失败')
+            self._send_json({'ok': False, 'error': '黑名单保存失败'})
+            return
+        console_log('BLACKLIST', f'Pixiv: 黑名单移除 {nid} (剩 {len(ids)} 个)')
         self._send_json({'ok': True})
 
     def _handle_blacklist_clear(self):
         """POST /api/blacklist/clear: 保存空集"""
-        save_blacklist(set())
-        console_log('SCAN', 'Pixiv: 黑名单已清空')
+        if not save_blacklist(set()):
+            console_log('ERROR', '黑名单保存失败')
+            self._send_json({'ok': False, 'error': '黑名单保存失败'})
+            return
+        console_log('BLACKLIST', 'Pixiv: 黑名单已清空')
         self._send_json({'ok': True})
 
     def _handle_image(self, params):
@@ -2152,12 +2302,11 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Type', ct)
             self.send_header('Content-Length', str(len(data)))
             self.send_header('Cache-Control', 'public, max-age=3600')
-            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(data)
         except Exception as e:
             console_log('ERROR', f'图片加载失败: {filename} - {e}')
-            self._send_error(404, str(e))
+            self._send_error(404, '图片加载失败')
 
     def _handle_log(self, params):
         msg = params.get('msg', [None])[0]
@@ -2190,14 +2339,21 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
         self._send_json({'ok': True})
 
     def _handle_config(self):
-        self._send_json(load_config())
+        conf = load_config()
+        conf['hasPhpsessid'] = bool(conf.get('PHPSESSID'))
+        conf['PHPSESSID'] = ''
+        self._send_json(conf)
 
     def _handle_config_save(self):
-        content_length = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(content_length)
-        data = json.loads(body)
-        save_config(data)
-        self._send_json({'ok': True})
+        try:
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body)
+            save_config(data)
+            self._send_json({'ok': True})
+        except Exception as e:
+            console_log('ERROR', f'配置保存失败: {e}')
+            self._send_json({'error': f'保存失败: {e}'})
 
 # ─── Server ──────────────────────────────────────────────────────────────────
 
@@ -2206,7 +2362,8 @@ class ThreadedServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
 
 def main():
-    server = ThreadedServer(('0.0.0.0', PORT), SyncHandler)
+    bind_host = '0.0.0.0' if load_config().get('allowLan') else '127.0.0.1'
+    server = ThreadedServer((bind_host, PORT), SyncHandler)
 
     banner = (
         '+------------------------------------------+\n'
@@ -2217,6 +2374,7 @@ def main():
     sys.stderr.write(f'{banner}\n')
     sys.stderr.flush()
     console_log('DONE', '服务器就绪')
+    console_log('DONE', '仅本机访问 127.0.0.1' if bind_host == '127.0.0.1' else '局域网访问已开启 0.0.0.0')
     log_path = os.path.join(runtime_dir(), 'sync.log')
     sys.stderr.write(f'  日志文件: {log_path}\n')
     sys.stderr.flush()
@@ -2225,8 +2383,7 @@ def main():
 
     def shutdown(sig, frame):
         print('\n  关闭中...')
-        server.shutdown()
-        sys.exit(0)
+        threading.Thread(target=server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)

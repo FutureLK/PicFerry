@@ -87,19 +87,23 @@ previewDelay = 500
 pixivInterval = 0.8
 pixivLimit = 0
 maxRows = 1000
+allowLan = 0
 ```
 
 字段说明:
 - `dev1ceA` — 设备 A 的 HTTP/FTP 链接
 - `dev1ceB` — 设备 B 的 HTTP/FTP 链接
 - `PixivUID` — Pixiv 用户 ID
-- `PHPSESSID` — Pixiv 登录凭证 (Cookie)
+- `PHPSESSID` — Pixiv 登录凭证 (Cookie)（/api/config 不回显明文；留空保存保留原值；清空需手动编辑 config.ini）
 - `PixivL` — 查重用的本地文件夹路径
 - `thumbnailSize` — 缩略图尺寸 px（16-128，默认 48）
 - `previewDelay` — 悬浮预览延迟 ms（100-2000，默认 500）
 - `pixivInterval` — Pixiv 请求间隔 秒（0.1-10，默认 0.8，防限流）
 - `pixivLimit` — Pixiv 扫描数量上限（0=全部）
-- `maxRows` — 查重结果行数上限（10-5000，默认 1000）
+- `maxRows` — 结果表行数上限（设备同步/Pixiv 查重，10-5000，默认 1000）
+- `allowLan` — 绑定 0.0.0.0 开启局域网访问（0=仅本机，默认 0）；开启后可从局域网设备浏览器打开 http://<电脑IP>:13826
+
+⚠ 开启后局域网内任何设备均可无鉴权访问本服务并读写文件
 
 ## 支持的数据源
 
@@ -114,7 +118,7 @@ pip install pyinstaller
 pyinstaller --onefile --name "图片同步" server.py
 ```
 
-产出 `dist/图片同步.exe`，约 6.7MB，不依赖 Python 环境。EXE 模式下配置文件与日志均落在 EXE 同目录（非临时目录）。
+产出 `dist/图片同步.exe`，约 7 MB（以重建后实测为准），不依赖 Python 环境。EXE 模式下配置文件与日志均落在 EXE 同目录（非临时目录）。
 
 ## API 接口
 
@@ -128,7 +132,7 @@ pyinstaller --onefile --name "图片同步" server.py
 | `/api/log` | GET/POST | `cat` = 类别, `msg` = 消息 | 前端日志推送到终端 + sync.log + 内存缓冲 |
 | `/api/logs` | GET | `since` = 日志 id | 增量拉取日志（环形缓冲，`truncated` 标志表示需重载） |
 | `/api/logs/clear` | POST | — | 清空内存日志缓冲（不动 sync.log） |
-| `/api/config` | GET | — | 读取配置 JSON |
+| `/api/config` | GET | — | 读取配置 JSON（PHPSESSID 不回显，返回 hasPhpsessid） |
 | `/api/config/save` | POST | 全部配置字段 | 保存配置到 config.ini |
 | `/api/pixiv/bookmarks` | POST | `uid`, `phpsessid`, `path`, `limit?` | 启动 Pixiv 收藏扫描（后台 Job） |
 | `/api/pixiv/bookmarks/stop` | POST | — | 请求终止当前扫描 |
@@ -138,16 +142,18 @@ pyinstaller --onefile --name "图片同步" server.py
 | `/api/blacklist/add` | POST | `id`（裸 ID 或作品链接） | 添加黑名单 |
 | `/api/blacklist/remove` | POST | `id` | 移除黑名单 |
 | `/api/blacklist/clear` | POST | — | 清空黑名单 |
-| `/api/...` | OPTIONS | — | CORS 预检，所有接口均支持跨域 |
+| `/api/...` | OPTIONS | — | 预检处理（跨源请求返回 403，仅同源可用） |
 
 ## 项目结构
 
 ```
 ├── server.py          Python 服务器（内嵌 HTML/CSS/JS，单文件）
 ├── dist/
-│   └── 图片同步.exe     打包后的独立可执行文件 (~6.7 MB)
+│   └── 图片同步.exe     打包后的独立可执行文件 (~7 MB)
 ├── sync.log           运行日志（自动生成，与 EXE 同目录）
 ├── config.ini         用户配置（自动生成/保存，不入库）
 ├── blacklist.csv      Pixiv 黑名单（自动生成，不入库）
 └── README.md
 ```
+
+> 注：当前 `dist/图片同步.exe` 为 2026-08-12 旧构建（未含查重反转等更新），建议优先源码运行；重建前以源码行为为准。
