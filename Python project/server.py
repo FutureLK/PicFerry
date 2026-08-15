@@ -2365,13 +2365,7 @@ def main():
     bind_host = '0.0.0.0' if load_config().get('allowLan') else '127.0.0.1'
     server = ThreadedServer((bind_host, PORT), SyncHandler)
 
-    banner = (
-        '+------------------------------------------+\n'
-        '|  图片同步 - LAN File Sync                |\n'
-        f'|  http://localhost:{PORT}                    |\n'
-        '+------------------------------------------+'
-    )
-    sys.stderr.write(f'{banner}\n')
+    sys.stderr.write(f'图片同步 - LAN File Sync: http://127.0.0.1:{PORT}\n')
     sys.stderr.flush()
     console_log('DONE', '服务器就绪')
     console_log('DONE', '仅本机访问 127.0.0.1' if bind_host == '127.0.0.1' else '局域网访问已开启 0.0.0.0')
@@ -2379,7 +2373,7 @@ def main():
     sys.stderr.write(f'  日志文件: {log_path}\n')
     sys.stderr.flush()
 
-    webbrowser.open(f'http://localhost:{PORT}')
+    webbrowser.open(f'http://127.0.0.1:{PORT}')
 
     def shutdown(sig, frame):
         print('\n  关闭中...')

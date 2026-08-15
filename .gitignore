@@ -29,7 +29,6 @@ Python project/blacklist.csv
 # opencode
 .omo/
 .codegraph/
-AGENT.md
 
 # playwright mcp artifacts
 .playwright-mcp/
