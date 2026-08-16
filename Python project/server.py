@@ -228,6 +228,7 @@ th{text-align:left;padding:10px 12px;color:#8b949e;font-weight:600;border-bottom
 td{padding:8px 12px;border-bottom:1px solid #21262d;vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#1c2128}
+tr.row-blacklisted{opacity:.55}
 .filename{font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:13px;word-break:break-all}
 .file-hash{font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:11px;color:#8b949e}
 .summary{font-size:14px;color:#c9d1d9;margin-bottom:12px;padding:12px 16px;background:#0d1117;border-radius:6px;border:1px solid #30363d;text-align:center}
@@ -438,6 +439,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
             <tr>
               <th style="width:40px">#</th>
               <th>范围</th>
+              <th style="width:76px">操作</th>
               <th style="width:100px">ID</th>
               <th style="width:110px">分p</th>
             </tr>
@@ -1182,14 +1184,41 @@ function renderPixivResult(summary, matched) {
       html += '<tr>';
       html += '<td>' + (i + 1) + '</td>';
       html += '<td class="filename">' + escapeHtml(f.illust_id + '_' + f.range) + '</td>';
+      html += '<td><button class="btn blk-add" style="padding:4px 10px;font-size:12px" data-id="' + escapeHtml(f.illust_id) + '">加黑名单</button></td>';
       // escapeHtml 基于 textContent→innerHTML，不转义引号；href 属性上下文须再补 &quot;（防 " 逃逸属性注入）
       html += '<td><a href="' + escapeHtml('https://www.pixiv.net/artworks/' + f.illust_id).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(f.illust_id).replace(/"/g, '&quot;') + '</a></td>';
       html += '<td>已有' + f.saved_pages + '张/共' + f.pageCount + '张</td>';
       html += '</tr>';
     });
     tbody.innerHTML = html;
+
+    // 加黑名单按钮: 行保留 + 变暗标记; 进入即 disabled（双击防护）; 成功保持 disabled
+    document.querySelectorAll('#pixivFileList .blk-add').forEach(btn => {
+      btn.addEventListener('click', async function() {
+        btn.disabled = true;
+        try {
+          const res = await fetch('/api/blacklist/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: btn.dataset.id })
+          });
+          const data = await res.json();
+          if (data.ok || !data.error) {
+            btn.closest('tr').classList.add('row-blacklisted');
+            btn.textContent = '已加入';
+            loadBlacklistUI();
+          } else {
+            btn.disabled = false;
+            setPixivStatus('添加黑名单失败: ' + (data.error || ''), 'error');
+          }
+        } catch (e) {
+          btn.disabled = false;
+          setPixivStatus('添加黑名单失败: ' + (e.message || ''), 'error');
+        }
+      });
+    });
   } else {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#484f58;padding:20px">没有缺失作品</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#484f58;padding:20px">没有缺失作品</td></tr>';
   }
   document.getElementById('pixivResult').classList.remove('hidden');
   if (matched.length > 0) {
