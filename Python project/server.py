@@ -970,7 +970,9 @@ async function doHash() {
     return;
   }
   const job = ++hashJobSeq;
-  if (progressOwner !== 'scan') progressOwner = 'hash';
+  // 进度条归属认领: 仅当无任何在途任务(null)时才认领 'hash'——scan/sync 在途均不劫持
+  // （同步在途勾选哈希: 不认领 → 哈希完成时 if(progressOwner==='hash') 为假 → 不提前隐藏同步进度条）
+  if (progressOwner === null) progressOwner = 'hash';
   logToServer('HASH', '开始哈希校验 ' + currentFiles.length + ' 个文件');
 
   for (let i = 0; i < currentFiles.length; i++) {
