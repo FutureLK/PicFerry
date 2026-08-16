@@ -192,6 +192,8 @@ HTML = r"""<!DOCTYPE html>
 <title>图片同步</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
+/* 全局缩放系数：按参考站 benchmark.leoblack.top 实测字号比（表格 0.92rem≈14.7px vs 本应用 13px≈1.13）取 1.15；容器宽度不追平基准站 1320px；如需调整只改这一处 */
+html{zoom:1.15}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
 .container{max-width:960px;margin:0 auto;padding:24px 16px}
 .card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:16px}
