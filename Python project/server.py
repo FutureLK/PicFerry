@@ -835,7 +835,7 @@ function renderTable() {
     const sizeStr = f.size != null ? formatSize(f.size) : '-';
     const delay = Math.min(i * 30, 300);
     const thumbUrl = srcUrl ? '/api/image?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name) : '';
-    html += '<tr class="row-enter" style="animation-delay:' + delay + 'ms">';
+    html += '<tr class="row-enter" data-idx="' + i + '" style="animation-delay:' + delay + 'ms">';
     html += '<td><input type="checkbox" class="file-cb" data-idx="' + i + '" checked></td>';
     html += '<td>' + (i + 1) + '</td>';
     html += '<td class="thumb-wrap">';
@@ -895,9 +895,9 @@ const previewImg = document.getElementById('previewImg');
 const previewName = document.getElementById('previewName');
 
 function bindPreviewHover() {
-  document.querySelectorAll('.filename-link').forEach(link => {
+  document.querySelectorAll('#fileList .thumb-wrap, #fileList .filename').forEach(link => {
     link.addEventListener('mouseenter', function(e) {
-      const idx = parseInt(this.dataset.idx);
+      const idx = parseInt(this.closest('tr').dataset.idx);
       const f = currentFiles[idx];
       if (!f) return;
       const srcUrl = scanDir === 'ab' ? urlB.value.trim() : urlA.value.trim();
@@ -923,7 +923,12 @@ function bindPreviewHover() {
       }, delay);
     });
 
-    link.addEventListener('mouseleave', function() {
+    link.addEventListener('mouseleave', function(e) {
+      const rel = e.relatedTarget;
+      if (rel && rel.closest && rel.closest('.thumb-wrap, .filename')) {
+        clearTimeout(previewTimer);
+        return;
+      }
       clearTimeout(previewTimer);
       previewPanel.classList.remove('active');
     });
