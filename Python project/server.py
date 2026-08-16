@@ -559,6 +559,8 @@ let currentFiles = [];
 let scanDir = 'ab';  // 'ab' = B→A 正向, 'ba' = A→B 反向
 let loadedFilesA = [];
 let loadedFilesB = [];
+let hashJobSeq = 0;      // 哈希任务世代计数器: 取消/重扫/切向/同步都会 ++, 旧循环失配即静默退出
+let progressOwner = null; // 进度条归属: 'hash' | 'scan' | 'sync' | null（单写者, 防误收）
 
 // ─── Config auto-fill & save ───────────────────────────────────
 let globalConfig = null;   // 供设置 tab / 预览延迟 / 缩略图尺寸读取
@@ -730,6 +732,7 @@ async function doScan() {
   emptyState.classList.add('hidden');
   setStatus('正在扫描设备 A...', 'loading');
   showProgress(true);
+  progressOwner = 'scan';
   setProgress(20, '正在扫描设备 A...');
   resultSection.classList.add('hidden');
   statsBar.classList.add('hidden');
@@ -745,8 +748,8 @@ async function doScan() {
     const data1 = await res1.json();
     const data2 = await res2.json();
 
-    if (data1.error) { setStatus('设备 A 连接失败: ' + data1.error, 'error'); showEmptyState(); scanBtn.disabled = false; showProgress(false); return; }
-    if (data2.error) { setStatus('设备 B 连接失败: ' + data2.error, 'error'); showEmptyState(); scanBtn.disabled = false; showProgress(false); return; }
+    if (data1.error) { setStatus('设备 A 连接失败: ' + data1.error, 'error'); showEmptyState(); scanBtn.disabled = false; showProgress(false); progressOwner = null; return; }
+    if (data2.error) { setStatus('设备 B 连接失败: ' + data2.error, 'error'); showEmptyState(); scanBtn.disabled = false; showProgress(false); progressOwner = null; return; }
 
     loadedFilesA = data1.files || [];
     loadedFilesB = data2.files || [];
@@ -760,6 +763,7 @@ async function doScan() {
     runDedup();
 
     showProgress(false);
+    progressOwner = null;
 
     if (currentFiles.length === 0) {
       if (scanDir === 'ab') {
@@ -790,6 +794,7 @@ async function doScan() {
     setStatus('扫描出错: ' + e.message, 'error');
     showEmptyState();
     showProgress(false);
+    progressOwner = null;
   }
   scanBtn.disabled = false;
 }
@@ -812,6 +817,8 @@ function renderStats(filesA, filesB) {
 }
 
 function runDedup() {
+  hashJobSeq++;
+  if (progressOwner === 'hash') { showProgress(false); progressOwner = null; }
   const namesA = new Set(loadedFilesA.map(f => f.name));
   const namesB = new Set(loadedFilesB.map(f => f.name));
 
@@ -942,34 +949,51 @@ function updateSyncBtn() {
   syncBtn.disabled = count === 0;
 }
 
+function syncHashColumn() {
+  hashTh.classList.toggle('hidden', !hashToggle.checked);
+  document.querySelectorAll('.file-hash').forEach(el => el.classList.toggle('hidden', !hashToggle.checked));
+}
+
 async function doHash() {
   const srcUrl = scanDir === 'ab' ? urlB.value.trim() : urlA.value.trim();
   if (!srcUrl) return;
 
   setProgress(0, '正在计算哈希值...');
   showProgress(true);
-  hashTh.classList.remove('hidden');
+  if (!hashToggle.checked || currentFiles.length === 0) {
+    // 早退守卫: 此处 progressOwner 尚未被本函数认领（claim 在守卫之后）
+    // - 'scan'/'sync' 在途: 静默返回, 绝不碰他人进度条（扫描在途勾选哈希绝不影响 scan 进度条）
+    // - null（无在途任务）: 本 doHash 刚 showProgress(true) 显示了进度条, 勾选态异常/无文件 → 隐藏防残留空进度条
+    if (progressOwner === null) { showProgress(false); }
+    return;
+  }
+  const job = ++hashJobSeq;
+  if (progressOwner !== 'scan') progressOwner = 'hash';
   logToServer('HASH', '开始哈希校验 ' + currentFiles.length + ' 个文件');
 
   for (let i = 0; i < currentFiles.length; i++) {
     const f = currentFiles[i];
+    if (job !== hashJobSeq) return;
+    if (f.hash) continue;
     setProgress(Math.round((i / currentFiles.length) * 100), '计算哈希值 ' + (i+1) + '/' + currentFiles.length + ': ' + f.name);
     try {
       const res = await fetch('/api/hash?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name), { method: 'POST' });
       const data = await res.json();
+      if (job !== hashJobSeq) return;
       if (data.sha256) {
         f.hash = data.sha256.substring(0, 16) + '...';
         const row = fileList.querySelector('tr:nth-child(' + (i + 1) + ')');
         if (row) {
           const cell = row.querySelector('.file-hash');
-          if (cell) { cell.textContent = f.hash; cell.classList.remove('hidden'); }
+          if (cell) { cell.textContent = f.hash; if (hashToggle.checked) cell.classList.remove('hidden'); }
         }
       }
     } catch (e) {
       // skip
     }
   }
-  showProgress(false);
+  if (progressOwner === 'hash') { showProgress(false); progressOwner = null; }
+  syncHashColumn();
 }
 
 async function doSync() {
@@ -988,6 +1012,8 @@ async function doSync() {
   syncBtn.disabled = true;
   scanBtn.disabled = true;
   showProgress(true);
+  hashJobSeq++;
+  progressOwner = 'sync';
   logToServer('SYNC', '开始同步 ' + toSync.length + ' 个文件 (' + dirLabel + ')');
 
   let success = 0, fail = 0;
@@ -1007,7 +1033,7 @@ async function doSync() {
     }
   }
 
-  showProgress(false);
+  if (progressOwner === 'sync') { showProgress(false); progressOwner = null; }
 
   // dirLabel 已在上面定义，直接使用
 
@@ -1182,14 +1208,14 @@ document.getElementById('pixivStopBtn').addEventListener('click', stopPixivJob);
 
 scanBtn.addEventListener('click', doScan);
 hashToggle.addEventListener('change', function() {
-  if (currentFiles.length > 0) {
-    if (this.checked) {
-      document.querySelectorAll('.file-hash').forEach(el => el.classList.remove('hidden'));
-      doHash();
-    } else {
-      hashTh.classList.add('hidden');
-      document.querySelectorAll('.file-hash').forEach(el => el.classList.add('hidden'));
-    }
+  if (this.checked) {
+    hashJobSeq++;
+    syncHashColumn();
+    doHash();
+  } else {
+    hashJobSeq++;
+    syncHashColumn();
+    if (progressOwner === 'hash') { showProgress(false); progressOwner = null; }
   }
 });
 selectAll.addEventListener('change', function() {
