@@ -26,14 +26,14 @@ This document is the project constitution for AI agents. Read and follow it befo
 │   ├── blacklist.csv         ← Pixiv 黑名单（运行时生成，不入库）
 │   ├── sync.log              ← 运行日志（运行时生成，不入库）
 │   └── dist/                 ← PyInstaller 产物（不入库）
-├── archived/                 ← 历史归档，禁止读取/修改/搜索（见 §3 红线）
+├── archived/                 ← 历史周期归档，规范见 archived/archived.md（默认不读，§3.2 红线）
 └── .omo/ .codegraph/         ← AI 工具目录，禁止修改
 ```
 
 ## 3. 要求限制（红线，按优先级）
 
 1. **禁止引入第三方依赖。** 项目是纯 Python 标准库（`http.server`/`ftplib`/`urllib` 等），PyInstaller 单文件零依赖打包是核心卖点。任何 `pip install X`、`import requests`、`from bs4 import ...` 都属于违规。新增功能必须用标准库实现。
-2. **禁止读取、修改、搜索 `archived/` 目录。** 它是历史会话的归档（含大量 .omo 证据/计划/脚本垃圾），读取会严重浪费上下文。若用户要求看归档内容，先询问确认再动。
+2. **禁止读取、修改、搜索 `archived/` 目录。** 它是已归档工程周期的溯源库（结论层明文 + 原料层 zip，规范见 `archived/archived.md`），默认不读以免浪费上下文。若用户要求看归档内容，先询问确认，并按 `archived/archived.md` §6 溯源流程操作。
 3. **禁止硬编码新配置键。** 所有可调参数必须注册进 `_CONFIG_KEYS` 注册表（格式 `key: (default, lo, hi, type)`），走 `load_config()`/`save_config()` 读写。直接把值写死或另开解析逻辑 = 违规。
 4. **禁止提交运行时文件。** `config.ini`、`blacklist.csv`、`sync.log`、`dist/` 已在 `.gitignore`，不得强制添加。
 5. **禁止删除/绕过同源校验。** `_check_origin` 是所有 `/api/*` 的安全闸门（防 CSRF + DNS rebinding），新端点必须在 `do_GET`/`do_POST` 中经过它，不得跳过。
@@ -55,7 +55,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 
 - 保持任务专注；不确定时先问，不要猜。
 - 对不熟悉的术语/概念，主动联网搜索或向用户提问，不要臆造。
-- 搜索/读取范围默认排除 `archived/`（§3 红线）。
+- 搜索/读取范围默认排除 `archived/`（§3.2 红线；用户授权时按 `archived/archived.md` §6 溯源）。
 - 中文项目：注释、日志、UI 文案保持中文；代码标识符用英文。
 - 改动前先说明方案与影响面，涉及红线（§3）必须提示。
 - **Plan 模式**：使用 plan 模式时，尽可能详细地说明**要做什么、为什么这么做、怎么做**，让用户能清晰理解你的思路和实现细节。计划经用户确认即视为**锁定**——执行阶段不再讨论替代方案；执行期发现计划硬伤等协作协议见 `docs/guides/collaboration-protocol.md`。
@@ -69,6 +69,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 - `docs/guides/module-conventions.md` — 结构地图与模块约定（代码导航主入口）
 - `docs/guides/collaboration-protocol.md` — 执行期协作协议
 - `docs/guides/` — 操作指南（新增设置/新增 API）
+- `archived/archived.md` — 归档目录规范与溯源指引（用户授权查阅归档时按此操作）
 - `Python project/README.md` — 用户视角功能说明
 - Pixiv Web AJAX 接口文档（非官方）：`github.com/daydreamer-json/pixiv-ajax-api-docs`（端点 `PIXIV_BOOKMARK_URL` 来源，见 `docs/api.md` §Pixiv）
 
