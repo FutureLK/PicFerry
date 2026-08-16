@@ -1182,7 +1182,8 @@ function renderPixivResult(summary, matched) {
       html += '<tr>';
       html += '<td>' + (i + 1) + '</td>';
       html += '<td class="filename">' + escapeHtml(f.illust_id + '_' + f.range) + '</td>';
-      html += '<td>' + escapeHtml(f.illust_id) + '</td>';
+      // escapeHtml 基于 textContent→innerHTML，不转义引号；href 属性上下文须再补 &quot;（防 " 逃逸属性注入）
+      html += '<td><a href="' + escapeHtml('https://www.pixiv.net/artworks/' + f.illust_id).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(f.illust_id).replace(/"/g, '&quot;') + '</a></td>';
       html += '<td>已有' + f.saved_pages + '张/共' + f.pageCount + '张</td>';
       html += '</tr>';
     });
