@@ -26,9 +26,10 @@ Thumbs.db
 Python project/config.ini
 Python project/blacklist.csv
 
-# opencode
+# AI Agent
 .omo/
 .codegraph/
+.zcode/
 
 # playwright mcp artifacts
 .playwright-mcp/
