@@ -22,9 +22,9 @@ This document is the project constitution for AI agents. Read and follow it befo
 ├── Python project/           ← 唯一代码目录
 │   ├── server.py             ← 全部代码（单文件，见 §4 结构地图）
 │   ├── README.md             ← 用户文档（功能/API/打包）
-│   ├── config.ini            ← 用户配置（运行时生成，不入库）
-│   ├── blacklist.csv         ← Pixiv 黑名单（运行时生成，不入库）
-│   ├── sync.log              ← 运行日志（运行时生成，不入库）
+│   ├── config/               ← 运行时文件目录（自动创建，不入库）
+│   │   ├── config.ini        ← 用户配置（旧版根目录散落文件首次启动自动迁入）
+│   │   └── blacklist.csv     ← Pixiv 黑名单（运行时生成）
 │   └── dist/                 ← PyInstaller 产物（不入库）
 ├── archived/                 ← 历史周期归档，规范见 archived/archived.md（默认不读，§3.2 红线）
 └── .omo/ .codegraph/         ← AI 工具目录，禁止修改
@@ -35,7 +35,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 1. **禁止引入第三方依赖。** 项目是纯 Python 标准库（`http.server`/`ftplib`/`urllib` 等），PyInstaller 单文件零依赖打包是核心卖点。任何 `pip install X`、`import requests`、`from bs4 import ...` 都属于违规。新增功能必须用标准库实现。
 2. **禁止读取、修改、搜索 `archived/` 目录。** 它是已归档工程周期的溯源库（结论层明文 + 原料层 zip，规范见 `archived/archived.md`），默认不读以免浪费上下文。若用户要求看归档内容，先询问确认，并按 `archived/archived.md` §6 溯源流程操作。
 3. **禁止硬编码新配置键。** 所有可调参数必须注册进 `_CONFIG_KEYS` 注册表（格式 `key: (default, lo, hi, type)`），走 `load_config()`/`save_config()` 读写。直接把值写死或另开解析逻辑 = 违规。
-4. **禁止提交运行时文件。** `config.ini`、`blacklist.csv`、`sync.log`、`dist/` 已在 `.gitignore`，不得强制添加。
+4. **禁止提交运行时文件。** `config/`（config.ini、blacklist.csv）、`dist/` 已在 `.gitignore`，不得强制添加。
 5. **禁止删除/绕过同源校验。** `_check_origin` 是所有 `/api/*` 的安全闸门（防 CSRF + DNS rebinding），新端点必须在 `do_GET`/`do_POST` 中经过它，不得跳过。
 6. **PHPSESSID 是用户 Pixiv 凭证。** `/api/config` 绝不回显明文（只返回 `hasPhpsessid`）；日志中不得打印 PHPSESSID。
 7. **端口 13826 是硬约束。** `PORT = 13826`，前端 HTML 内也硬编码了它；改动必须两端同步。

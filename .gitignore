@@ -22,9 +22,8 @@ Thumbs.db
 # logs
 *.log
 
-# config
-Python project/config.ini
-Python project/blacklist.csv
+# config (运行时文件统一在 config/ 子目录)
+Python project/config/
 
 # AI Agent
 .omo/

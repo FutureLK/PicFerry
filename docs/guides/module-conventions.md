@@ -9,12 +9,12 @@
 
 | 行区 | 内容 | 新增代码放哪 |
 |---|---|---|
-| 1-26 | 导入（纯标准库） | 新 import 加到这里（**仅标准库**） |
-| 27-28 | `PORT=13826`、`IMAGE_EXTS` | 模块级常量加在附近 |
-| 31-108 | **配置系统**：`_CONFIG_KEYS` 注册表(45) → `_parse_config_value`(55) → `load_config`(69)/`save_config`(92)。损坏配置回落默认不抛错 | **不要在这里塞业务逻辑** |
-| 148-180 | `console_log`(152)：日志写文件 + stderr + 内存环形缓冲（网页轮询用） | 日志相关工具函数 |
+| 1-24 | 导入（纯标准库） | 新 import 加到这里（**仅标准库**） |
+| 25-26 | `PORT=13826`、`IMAGE_EXTS` | 模块级常量加在附近 |
+| 28-125 | **配置系统**：`_CONFIG_KEYS` 注册表(61) → `_parse_config_value`(71) → `load_config`(85)/`save_config`(108)。损坏配置回落默认不抛错 | **不要在这里塞业务逻辑** |
+| 154-180 | `console_log`(158)：日志写文件 + stderr + 内存环形缓冲（网页轮询用） | 日志相关工具函数 |
 | 183-1504 | **内嵌前端**：`HTML` 常量（整个网页 UI，含 CSS/JS，约 1320 行）；改动后的视觉验证见本文档 §6 | 前端改动只在这一区域 |
-| 1543-1690 | 数据源：`ftp_list`(1546)/`ftp_download`(1587)/`ftp_upload`(1603)/`local_list`(1667) | 新的数据源读取函数 |
+| 1544-1690 | 数据源：`ftp_list`(1546)/`ftp_download`(1587)/`ftp_upload`(1603)/`local_list`(1667) | 新的数据源读取函数 |
 | 1692+ | 本地路径净化：`_safe_error_text`(1692)/`_sanitize_rel_path`(1699)/`_declared_local_bases`(1715)/`_check_local_base`(1725)/`_check_realpath_within`(1734)，防目录穿越 | 路径安全相关 |
 | 1874+ | `fetch_all_pixiv_bookmark_ids`：Pixiv 收藏拉取（分页/黑名单/限量/可终止） | Pixiv 相关逻辑 |
 | 1990-2124 | **Pixiv 后台 Job 引擎（单槽）**：`pixiv_job` 状态字典(1990) → `run_pixiv_job`(2014) 状态机 `fetching→scanning→matching→done/stopped/error` → `_start_pixiv_job`(2109) 原子启动。关键时序：**每个昂贵阶段前先检查 `stop`** | 新的后台任务引擎放这类区域 |
@@ -24,7 +24,7 @@
 ## 2. 关键约定
 
 - 新增 API 端点：在 `do_GET`(2186) 或 `do_POST`(2215) 加 elif 分支 → 写 `_handle_*` 方法 → 更新 `docs/api.md`。
-- 新增配置：在 `_CONFIG_KEYS`(45) 注册（若需范围/类型）→ `load_config`/`save_config` 自动覆盖（数值键）→ 前端表单同步 → 更新 `docs/settings.md`。
+- 新增配置：在 `_CONFIG_KEYS`(61) 注册（若需范围/类型）→ `load_config`/`save_config` 自动覆盖（数值键）→ 前端表单同步 → 更新 `docs/settings.md`。
 - 请求体为 JSON 时：读 `Content-Length` → `self.rfile.read` → `json.loads`，参考 `_handle_pixiv_bookmarks`(2319)。
 - 所有 API 响应 JSON 用 `ensure_ascii=False`，中文直接输出。
 
@@ -83,12 +83,12 @@
 
 | Region | Content | Where new code goes |
 |---|---|---|
-| 1-26 | Imports (stdlib only) | New imports go here (stdlib only) |
-| 27-28 | `PORT=13826`, `IMAGE_EXTS` | Module-level constants |
-| 31-108 | **Config system**: `_CONFIG_KEYS` registry(45) → `_parse_config_value`(55) → `load_config`(69)/`save_config`(92). Corrupt config falls back to defaults, never raises | **No business logic here** |
-| 148-180 | `console_log`(152): file + stderr + ring buffer (web polling) | Logging utilities |
+| 1-24 | Imports (stdlib only) | New imports go here (stdlib only) |
+| 25-26 | `PORT=13826`, `IMAGE_EXTS` | Module-level constants |
+| 28-125 | **Config system**: `_CONFIG_KEYS` registry(61) → `_parse_config_value`(71) → `load_config`(85)/`save_config`(108). Corrupt config falls back to defaults, never raises | **No business logic here** |
+| 154-180 | `console_log`(158): file + stderr + ring buffer (web polling) | Logging utilities |
 | 183-1504 | **Embedded frontend**: `HTML` constant (entire UI, CSS/JS, ~1320 lines); visual verification after changes: see §6 | All frontend changes |
-| 1543-1690 | Data sources: `ftp_list`(1546)/`ftp_download`(1587)/`ftp_upload`(1603)/`local_list`(1667) | New data-source readers |
+| 1544-1690 | Data sources: `ftp_list`(1546)/`ftp_download`(1587)/`ftp_upload`(1603)/`local_list`(1667) | New data-source readers |
 | 1692+ | Local-path sanitization: `_safe_error_text`(1692)/`_sanitize_rel_path`(1699)/`_declared_local_bases`(1715)/`_check_local_base`(1725)/`_check_realpath_within`(1734), traversal guard | Path-safety code |
 | 1874+ | `fetch_all_pixiv_bookmark_ids`: Pixiv bookmark fetching (paging/blacklist/limit/stoppable) | Pixiv logic |
 | 1990-2124 | **Pixiv Job engine (single-slot)**: `pixiv_job` state dict(1990) → `run_pixiv_job`(2014) state machine `fetching→scanning→matching→done/stopped/error` → `_start_pixiv_job`(2109) atomic start. Key timing: **check `stop` before every expensive phase** | New background-task engines |
@@ -98,7 +98,7 @@
 ## 2. Key conventions
 
 - New API endpoint: add elif branch in `do_GET`(2186) or `do_POST`(2215) → write `_handle_*` method → update `docs/api.md`.
-- New setting: register in `_CONFIG_KEYS`(45) (if range/type needed) → `load_config`/`save_config` auto-cover (numeric keys) → sync frontend form → update `docs/settings.md`.
+- New setting: register in `_CONFIG_KEYS`(61) (if range/type needed) → `load_config`/`save_config` auto-cover (numeric keys) → sync frontend form → update `docs/settings.md`.
 - JSON request bodies: read `Content-Length` → `self.rfile.read` → `json.loads`, see `_handle_pixiv_bookmarks`(2319).
 - All API JSON responses use `ensure_ascii=False`; Chinese output directly.
 

@@ -23,7 +23,7 @@
 | `/api/image` | GET | `url`, `file` | 图片代理（转发远程图片） | `_handle_image` |
 | `/api/log` | GET/POST | `cat`, `msg` | 前端日志推送到终端+文件+内存缓冲 | `_handle_log` |
 | `/api/logs` | GET | `since` | 增量拉取日志（环形缓冲） | `_handle_logs` |
-| `/api/logs/clear` | POST | — | 清空内存日志缓冲（不动 `sync.log`） | `_handle_logs_clear` |
+| `/api/logs/clear` | POST | — | 清空内存日志缓冲 | `_handle_logs_clear` |
 | `/api/config` | GET | — | 读取配置（PHPSESSID 不回显） | `_handle_config` |
 | `/api/config/save` | POST | 全部配置字段 | 保存配置到 `config.ini` | `_handle_config_save`(2498) |
 | `/api/pixiv/bookmarks` | POST | `uid`, `phpsessid`, `path`, `limit?` | 启动 Pixiv 收藏查重（后台 Job） | `_handle_pixiv_bookmarks`(2168) |
@@ -94,7 +94,7 @@ Job 状态机：`idle | fetching | scanning | matching | done | stopped | error`
 ### GET/POST `/api/log*`
 
 - `GET /api/logs?since=<id>` → 增量日志，`truncated` 标志表示需重载
-- `POST /api/logs/clear` → 清内存缓冲（不动 `sync.log`）
+- `POST /api/logs/clear` → 清内存缓冲
 - `POST /api/log`（body 或 query `cat`/`msg`）→ 前端日志转发，经 `console_log`(156)
 
 ## 安全
@@ -129,7 +129,7 @@ Contract for every `/api/*` endpoint. All `/api/*` requests must pass the same-o
 | `/api/image` | GET | `url`, `file` | Image proxy | `_handle_image` |
 | `/api/log` | GET/POST | `cat`, `msg` | Forward frontend logs | `_handle_log` |
 | `/api/logs` | GET | `since` | Incremental log polling (ring buffer) | `_handle_logs` |
-| `/api/logs/clear` | POST | — | Clear in-memory log buffer (not `sync.log`) | `_handle_logs_clear` |
+| `/api/logs/clear` | POST | — | Clear in-memory log buffer | `_handle_logs_clear` |
 | `/api/config` | GET | — | Read config (PHPSESSID never echoed) | `_handle_config` |
 | `/api/config/save` | POST | all fields | Save config to `config.ini` | `_handle_config_save`(2498) |
 | `/api/pixiv/bookmarks` | POST | `uid`, `phpsessid`, `path`, `limit?` | Start Pixiv dedup job (background) | `_handle_pixiv_bookmarks`(2168) |

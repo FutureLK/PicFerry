@@ -11,7 +11,7 @@
 从 [Releases 页面](https://github.com/FutureLK/Pixiv-IMG-local-duplication/releases) 下载最新版的 `图片同步.exe`，双击运行，浏览器自动打开。
 
 > 首次运行 Windows 可能提示安全警告，点击「更多信息」→「仍要运行」即可。
-> 配置文件 `config.ini` 与黑名单 `blacklist.csv` 均与 EXE 同目录。
+> 配置文件 `config.ini` 与黑名单 `blacklist.csv` 存放在 EXE 旁的 `config/` 文件夹内（旧版本散落在同目录的文件会在首次启动时自动迁入）。
 
 ### 方式二：源码运行
 
@@ -23,7 +23,7 @@ python server.py
 
 浏览器自动打开 `http://127.0.0.1:13826`
 
-> 程序启动时会自动读取同目录下的 `config.ini`，填入上次保存的值；修改输入框后按 Tab 移出即自动保存。
+> 程序启动时会自动读取 `config/config.ini`，填入上次保存的值；修改输入框后按 Tab 移出即自动保存。
 
 ## 界面功能
 
@@ -55,7 +55,7 @@ python server.py
 
 ### 黑名单
 
-在「更多设置」→「Pixiv 查重黑名单」添加作品 ID（支持裸 ID 或 `https://www.pixiv.net/artworks/123456` 链接），黑名单作品在扫描拉取阶段即被剔除（含分p环节），存储于同目录 `blacklist.csv`。
+在「更多设置」→「Pixiv 查重黑名单」添加作品 ID（支持裸 ID 或 `https://www.pixiv.net/artworks/123456` 链接），黑名单作品在扫描拉取阶段即被剔除（含分p环节），存储于 `config/blacklist.csv`。
 
 ### 控制台与网页日志
 
@@ -70,11 +70,9 @@ python server.py
 | `[DONE]` | 绿色 | 扫描/同步全部完成 |
 | `[ERROR]` | 红色 | 任何环节出错 |
 
-日志同时写入 `sync.log`（与 EXE 同目录），以防终端输出被关闭或缓冲。
-
 ## 配置文件（可选）
 
-在同目录下创建 `config.ini`，程序启动时自动加载并填入表单，离开输入框时自动保存。所有键均可留空或省略，使用默认值。
+配置存放在程序旁 `config/` 文件夹下的 `config.ini`，程序启动时自动加载并填入表单，离开输入框时自动保存。所有键均可留空或省略，使用默认值。
 
 ```ini
 [Settings]
@@ -121,7 +119,7 @@ pip install pyinstaller
 pyinstaller --onefile --name "图片同步" server.py
 ```
 
-产出 `dist/图片同步.exe`，约 7 MB（以重建后实测为准），不依赖 Python 环境。EXE 模式下配置文件与日志均落在 EXE 同目录（非临时目录）。
+产出 `dist/图片同步.exe`，约 7 MB（以重建后实测为准），不依赖 Python 环境。EXE 模式下配置文件落在 EXE 旁的 `config/` 文件夹（非临时目录）。
 
 ## API 接口
 
@@ -132,9 +130,9 @@ pyinstaller --onefile --name "图片同步" server.py
 | `/api/hash` | POST | `url`, `file` | 计算文件 SHA256 |
 | `/api/copy` | POST | `from`, `to`, `file` | 同步单个文件（来源 → 目标） |
 | `/api/image` | GET | `url`, `file` | 图片代理，转发图片供浏览器展示 |
-| `/api/log` | GET/POST | `cat` = 类别, `msg` = 消息 | 前端日志推送到终端 + sync.log + 内存缓冲 |
+| `/api/log` | GET/POST | `cat` = 类别, `msg` = 消息 | 前端日志推送到终端 + 内存缓冲 |
 | `/api/logs` | GET | `since` = 日志 id | 增量拉取日志（环形缓冲，`truncated` 标志表示需重载） |
-| `/api/logs/clear` | POST | — | 清空内存日志缓冲（不动 sync.log） |
+| `/api/logs/clear` | POST | — | 清空内存日志缓冲 |
 | `/api/config` | GET | — | 读取配置 JSON（PHPSESSID 不回显，返回 hasPhpsessid） |
 | `/api/config/save` | POST | 全部配置字段 | 保存配置到 config.ini |
 | `/api/pixiv/bookmarks` | POST | `uid`, `phpsessid`, `path`, `limit?` | 启动 Pixiv 收藏扫描（后台 Job） |
@@ -153,9 +151,9 @@ pyinstaller --onefile --name "图片同步" server.py
 ├── server.py          Python 服务器（内嵌 HTML/CSS/JS，单文件）
 ├── dist/
 │   └── 图片同步.exe     打包后的独立可执行文件 (~7 MB)
-├── sync.log           运行日志（自动生成，与 EXE 同目录）
-├── config.ini         用户配置（自动生成/保存，不入库）
-├── blacklist.csv      Pixiv 黑名单（自动生成，不入库）
+├── config/            运行时文件目录（自动创建）
+│   ├── config.ini     用户配置（自动生成/保存，不入库；旧版根目录文件自动迁入）
+│   └── blacklist.csv  Pixiv 黑名单（自动生成，不入库）
 └── README.md
 ```
 

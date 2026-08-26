@@ -35,7 +35,7 @@ python server.py
 - **设备同步**：输入设备A/B的HTTP/FTP/本地路径链接，点击「扫描比对」→ 勾选文件 → 「同步到设备A」。
 - **Pixiv查重**：在「Pixiv查重」页填写对应的UID、PHPSESSID（浏览器Cookie）与本地文件夹路径，点击「拉取收藏」；查重结果按作品聚合，格式 `123_p0~p9 | 123 | 已有2张/共10张`。
 - **黑名单**：在「更多设置」添加作品ID（支持裸ID或 `https://www.pixiv.net/artworks/123456` 链接）。
-- **配置**：所有设置项自动持久化到同目录 `config.ini`，字段说明见 [Python project/README.md](Python%20project/README.md)。
+- **配置**：所有设置项自动持久化到程序旁 `config/config.ini`，字段说明见 [Python project/README.md](Python%20project/README.md)。
 
 ## 注意事项
 

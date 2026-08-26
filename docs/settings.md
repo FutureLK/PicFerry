@@ -1,6 +1,6 @@
 # docs/settings.md — 配置参考
 
-`config.ini` 全部字段的说明。配置文件与 `server.py`（或 EXE）同目录，启动时自动加载，修改输入框失焦后自动保存。
+`config.ini` 全部字段的说明。配置文件位于程序旁 `config/` 子目录（旧版根目录散落文件首次启动自动迁入），启动时自动加载，修改输入框失焦后自动保存。
 
 > 目标读者：人类。AI 新增配置键时请走 `docs/guides/adding-a-setting.md` 的流程，并同步更新本文档。
 
@@ -80,7 +80,7 @@ lightTheme = 0
 
 # English
 
-Reference for every `config.ini` field. The file lives next to `server.py` (or the EXE); it is loaded at startup and saved automatically when a form input loses focus.
+Reference for every `config.ini` field. The file lives in the `config/` subfolder next to `server.py` (or the EXE); it is loaded at startup and saved automatically when a form input loses focus.
 
 ## Field Summary
 

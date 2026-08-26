@@ -21,8 +21,6 @@ import mimetypes
 import collections
 import configparser
 import itertools
-import logging
-import logging.handlers
 
 PORT = 13826
 IMAGE_EXTS = ('.jpg', '.jpeg', '.png', '.gif', '.webp')
@@ -39,7 +37,25 @@ def runtime_dir():
         return os.path.dirname(sys.executable)
     return _SCRIPT_DIR
 
-CONFIG_PATH = os.path.join(runtime_dir(), 'config.ini')
+# 运行时文件统一收进 config/ 子目录; 旧版散落在程序根目录的文件首次启动自动挪入
+CONFIG_DIR = os.path.join(runtime_dir(), 'config')
+os.makedirs(CONFIG_DIR, exist_ok=True)
+
+def _migrate_legacy_file(name):
+    """旧版运行时文件在程序根目录; 首次启动自动挪进 config/。
+    新位置已存在时以 config/ 为准, 旧文件保留不动; 失败静默(下次启动重试)。"""
+    old = os.path.join(runtime_dir(), name)
+    new = os.path.join(CONFIG_DIR, name)
+    if os.path.exists(old) and not os.path.exists(new):
+        try:
+            os.replace(old, new)
+        except OSError:
+            pass   # 此处早于 console_log 定义, 静默即可
+
+for _legacy_name in ('config.ini', 'blacklist.csv'):
+    _migrate_legacy_file(_legacy_name)
+
+CONFIG_PATH = os.path.join(CONFIG_DIR, 'config.ini')
 
 # 新设置键: 默认值与范围 (key: (default, lo, hi, type))
 _CONFIG_KEYS = {
@@ -126,16 +142,6 @@ LOG_SEQ = itertools.count(1)   # 单调 id; 进程存活期内不回退, 清空�
 LOG_LAST_ID = 0                # 已发出的最大 id（itertools.count 不可回读, 单独维护）
 LOG_LOCK = threading.Lock()
 
-# M6: sync.log 常驻句柄 + 5MB×3 轮转（处理器自带锁, 多线程写/轮转安全）
-_log_file_handler = None
-try:
-    _log_file_handler = logging.handlers.RotatingFileHandler(
-        os.path.join(runtime_dir(), 'sync.log'),
-        maxBytes=5 * 1024 * 1024, backupCount=3, encoding='utf-8')
-    _log_file_handler.setFormatter(logging.Formatter('%(message)s'))
-except Exception:
-    _log_file_handler = None
-
 # 检测终端是否支持 ANSI 颜色（Windows 旧终端可能不支持）
 _USE_COLOR = True
 if platform.system() == 'Windows':
@@ -152,12 +158,6 @@ if platform.system() == 'Windows':
 def console_log(category, message):
     ts = datetime.datetime.now().strftime('%H:%M:%S')
     line = f'[{ts}] [{category}] {message}'
-
-    # 写日志文件（EXE 所在目录）
-    if _log_file_handler is not None:
-        try:
-            _log_file_handler.handle(logging.LogRecord('sync', logging.INFO, '', 0, line, None, None))
-        except Exception: pass  # 日志写入失败不影响主流程
 
     # 写控制台 stderr（比 stdout 更可靠，在 PyInstaller 下也不会被吞）
     try:
@@ -1807,7 +1807,7 @@ PIXIV_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 # ─── Pixiv 查重黑名单 (blacklist.csv) ────────────────────────────────────────
 # 格式: 表头 "illust_id" + 每行一个作品 ID。表头行预留扩展列（如 tag/user_id）空间。
-BLACKLIST_PATH = os.path.join(runtime_dir(), 'blacklist.csv')
+BLACKLIST_PATH = os.path.join(CONFIG_DIR, 'blacklist.csv')
 BLACKLIST_LOCK = threading.Lock()
 
 
@@ -2484,7 +2484,7 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
         self._send_json({'logs': logs, 'next_id': next_id, 'truncated': truncated})
 
     def _handle_logs_clear(self):
-        """POST /api/logs/clear: 只清内存缓冲, 不动 sync.log, 计数器不重置"""
+        """POST /api/logs/clear: 只清内存缓冲, 计数器不重置"""
         with LOG_LOCK:
             LOG_BUFFER.clear()
         self._send_json({'ok': True})
@@ -2520,9 +2520,6 @@ def main():
     sys.stderr.flush()
     console_log('DONE', '服务器就绪')
     console_log('DONE', '仅本机访问 127.0.0.1' if bind_host == '127.0.0.1' else '局域网访问已开启 0.0.0.0')
-    log_path = os.path.join(runtime_dir(), 'sync.log')
-    sys.stderr.write(f'  日志文件: {log_path}\n')
-    sys.stderr.flush()
 
     webbrowser.open(f'http://127.0.0.1:{PORT}')
 
