@@ -24,6 +24,9 @@ Thumbs.db
 
 # config (运行时文件统一在 config/ 子目录)
 Python project/config/
+# 迁移过渡期兼容: 旧版散落在根目录的运行时文件(内含凭证, 防误提交); 完成迁移后可删
+Python project/config.ini
+Python project/blacklist.csv
 
 # AI Agent
 .omo/
