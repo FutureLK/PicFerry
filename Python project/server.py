@@ -284,7 +284,6 @@ tr:hover td{background:var(--bg-hover)}
 tr.row-blacklisted{opacity:.55}
 .filename{font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:13px;word-break:break-all}
 .file-hash{font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:11px;color:var(--text-muted)}
-.summary{font-size:14px;color:var(--text);margin-bottom:12px;padding:12px 16px;background:var(--bg);border-radius:6px;border:1px solid var(--border);text-align:center}
 .progress{background:var(--bg);border-radius:6px;padding:12px 16px;margin-bottom:12px;border:1px solid var(--border);display:none}
 .progress.active{display:block}
 .progress-bar{height:6px;background:var(--bg-inset);border-radius:3px;overflow:hidden;margin-bottom:8px}
@@ -299,6 +298,9 @@ tr.row-blacklisted{opacity:.55}
 .input-badge.invalid{color:var(--err)}
 .input-badge.error{color:var(--err)}
 .input-badge.success{color:var(--ok)}
+/* ─── Settings grid（界面设置两列布局，窄屏回退单列）─── */
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+@media (max-width:720px){.settings-grid{grid-template-columns:1fr}}
 /* ─── Stats bar ─── */
 .stats{display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap}
 .stat-item{flex:1;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px}
@@ -326,11 +328,12 @@ input[type="checkbox"]{accent-color:var(--accent);cursor:pointer}
 .thumb{width:var(--thumb-size,48px);height:var(--thumb-size,48px);object-fit:cover;border-radius:4px;display:block;background:var(--bg)}
 /* ─── Preview panel ─── */
 .preview-panel{display:none;position:fixed;z-index:1000;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px var(--shadow);overflow:hidden;pointer-events:none;max-width:420px}
-.preview-panel.active{display:block}
+.preview-panel.active{display:block;animation:previewFadeIn .15s ease-out}
 .preview-panel img{display:block;max-width:400px;max-height:480px;object-fit:contain}
 .preview-panel .preview-name{padding:8px 12px;font-size:12px;color:var(--text-muted);border-top:1px solid var(--border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* ─── Animations ─── */
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes previewFadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeIn .35s ease-out both}
 #syncBtn.slide-in{animation:slideDown .3s ease-out}
@@ -405,7 +408,6 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
     </div>
 
     <div id="resultSection" class="hidden">
-      <div class="summary" id="summary"></div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -510,6 +512,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
   <section class="tab-panel" id="tab-settings">
     <div class="card">
       <div class="card-title">界面设置</div>
+      <div class="settings-grid">
       <div class="input-group">
         <label for="settingTheme">界面主题</label>
         <select id="settingTheme">
@@ -536,8 +539,10 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
         <input type="number" id="settingPixivInterval" min="0.1" max="10" step="0.1"> s
       </div>
       <div class="input-group">
-        <label for="settingMaxRows">结果行数上限</label>
+        <label for="settingMaxRows">结果表行数上限</label>
         <input type="number" id="settingMaxRows" min="10" max="5000" step="10">
+        <div class="input-hint">设备同步扫描结果与 Pixiv 查重结果两张结果表的行数上限，与日志、缩略图无关</div>
+      </div>
       </div>
     </div>
     <div class="card">
@@ -615,7 +620,6 @@ const hashToggle = document.getElementById('hashToggle');
 const statusEl = document.getElementById('status');
 const resultSection = document.getElementById('resultSection');
 const emptyState = document.getElementById('emptyState');
-const summary = document.getElementById('summary');
 const fileList = document.getElementById('fileList');
 const selectAll = document.getElementById('selectAll');
 const syncBtn = document.getElementById('syncBtn');
@@ -810,7 +814,7 @@ async function doScan() {
   setStatus('正在扫描设备 A...', 'loading');
   showProgress(true);
   progressOwner = 'scan';
-  setProgress(20, '正在扫描设备 A...');
+  setProgress(20, '');   // 统一视觉: 文案只走状态栏, 进度条为纯附属
   resultSection.classList.add('hidden');
   statsBar.classList.add('hidden');
 
@@ -831,7 +835,8 @@ async function doScan() {
     loadedFilesA = data1.files || [];
     loadedFilesB = data2.files || [];
 
-    setProgress(50, '正在比对去重...');
+    setStatus('正在比对去重...', 'loading');
+    setProgress(50, '');
 
     // 显示设备统计
     renderStats(loadedFilesA, loadedFilesB);
@@ -974,6 +979,8 @@ function loadThumbnails() {
 // ─── Preview hover ─────────────────────────────────────────────────────
 
 let previewTimer = null;
+let previewSeq = 0;        // 预览代数: 换行/离开即 ++, 迟到的图片 onload 失配即丢弃
+let lastPreviewUrl = '';   // 上次预览地址: 同图重复 hover 时浏览器不再触发 onload, 需直接显示
 const previewPanel = document.getElementById('previewPanel');
 const previewImg = document.getElementById('previewImg');
 const previewName = document.getElementById('previewName');
@@ -991,19 +998,29 @@ function bindPreviewHover() {
       const delay = parseInt((globalConfig || {}).previewDelay) || 500;
       previewTimer = setTimeout(() => {
         const rect = this.getBoundingClientRect();
-        previewImg.src = '/api/image?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name);
         previewName.textContent = f.name + (f.size != null ? ' (' + formatSize(f.size) + ')' : '');
-        previewPanel.classList.add('active');
-        const panelH = previewPanel.offsetHeight || 480;
+        const url = '/api/image?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name);
+        const seq = ++previewSeq;
+        // 图片加载完成才显示面板(防未就绪空框), 再定位
+        const show = function() {
+          if (seq !== previewSeq) return;   // 迟到的加载: 已换行/已离开, 丢弃
+          previewPanel.classList.add('active');
+          const panelH = previewPanel.offsetHeight || 480;
 
-        // Position: below the link, or above if near bottom
-        let top = rect.bottom + 8;
-        if (top + panelH > window.innerHeight) {
-          top = rect.top - 8 - panelH;
-        }
-        let left = Math.min(rect.left, window.innerWidth - 420);
-        previewPanel.style.top = Math.max(8, top) + 'px';
-        previewPanel.style.left = Math.max(8, left) + 'px';
+          // Position: below the link, or above if near bottom
+          let top = rect.bottom + 8;
+          if (top + panelH > window.innerHeight) {
+            top = rect.top - 8 - panelH;
+          }
+          let left = Math.min(rect.left, window.innerWidth - 420);
+          previewPanel.style.top = Math.max(8, top) + 'px';
+          previewPanel.style.left = Math.max(8, left) + 'px';
+        };
+        if (lastPreviewUrl === url) { show(); return; }
+        lastPreviewUrl = url;
+        previewImg.onload = show;
+        previewImg.onerror = function() { /* 加载失败不显示, 防破图空框 */ };
+        previewImg.src = url;
       }, delay);
     });
 
@@ -1014,6 +1031,7 @@ function bindPreviewHover() {
         return;
       }
       clearTimeout(previewTimer);
+      previewSeq++;
       previewPanel.classList.remove('active');
     });
   });
@@ -1099,7 +1117,7 @@ async function doSync() {
 
   for (let i = 0; i < toSync.length; i++) {
     const f = toSync[i];
-    setProgress(Math.round((i / toSync.length) * 100), '正在同步 ' + (i+1) + '/' + toSync.length + ': ' + f.name);
+    setProgress(Math.round((i / toSync.length) * 100), '');   // 统一视觉: 同步文案只走状态栏
     setStatus('正在复制 ' + f.name + '...（' + (i+1) + '/' + toSync.length + '）', 'loading');
 
     try {
@@ -1294,6 +1312,7 @@ function renderPixivResult(summary, matched) {
         }
       });
     });
+    syncPixivRowsWithBlacklist();   // 渲染后按最新名单对齐(覆盖"渲染时 ID 已在黑名单"的边界)
   } else {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">没有缺失作品</td></tr>';
   }
@@ -1422,6 +1441,17 @@ settingTheme.addEventListener('change', function() {
 
 // 黑名单管理
 const blacklistList = document.getElementById('blacklistList');
+let currentBlacklist = new Set();   // 最新黑名单集合缓存: 供 Pixiv 结果行双向同步
+
+// Pixiv 结果行与黑名单双向同步: 在名单→变暗+已加入+禁用, 不在→恢复可点
+function syncPixivRowsWithBlacklist() {
+  document.querySelectorAll('#pixivFileList .blk-add').forEach(btn => {
+    const inList = currentBlacklist.has(btn.dataset.id);
+    btn.closest('tr').classList.toggle('row-blacklisted', inList);
+    btn.textContent = inList ? '已加入' : '加黑名单';
+    btn.disabled = inList;
+  });
+}
 
 function setBlacklistMsg(text, type) {
   const m = document.getElementById('blacklistMsg');
@@ -1435,9 +1465,12 @@ async function loadBlacklistUI() {
     const data = await res.json();
     const ids = data.ids || [];
     if (ids.length === 0) {
+      currentBlacklist = new Set();
+      syncPixivRowsWithBlacklist();
       blacklistList.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px 0">黑名单为空</div>';
       return;
     }
+    currentBlacklist = new Set(ids);
     blacklistList.innerHTML = ids.map(id =>
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--bg-inset);font-family:monospace;font-size:13px">' +
       '<span>' + escapeHtml(id) + '</span>' +
@@ -1456,6 +1489,7 @@ async function loadBlacklistUI() {
         loadBlacklistUI();
       });
     });
+    syncPixivRowsWithBlacklist();
   } catch (e) { /* 忽略 */ }
 }
 
