@@ -1,8 +1,3 @@
-"""
-图片同步 - 局域网文件比对与传输
-跨设备图片同步工具，支持 HTTP/FTP 协议
-"""
-
 import http.server
 import json
 import ctypes
@@ -54,6 +49,7 @@ _CONFIG_KEYS = {
     'pixivLimit':     (0,    0,     100000, 'int'),    # 0=全部
     'maxRows':        (1000, 10,    5000,   'int'),    # 行数上限
     'allowLan': (0, 0, 1, 'bool'),    # 0=仅本机 1=局域网
+    'lightTheme': (0, 0, 1, 'bool'),  # 0=深色(默认) 1=浅色(日间模式)
 }
 
 def _parse_config_value(key, raw):
@@ -192,90 +188,147 @@ HTML = r"""<!DOCTYPE html>
 <title>图片同步</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
+/* ─── 主题变量 ─────────────────────────────────────────────
+   深色为默认；[data-theme=light] 为日间模式覆盖层。
+   新增颜色规则一律引用变量，禁止再写硬编码 hex（内联样式也用 var()） */
+:root{
+  color-scheme:dark;
+  --bg:#0d1117;           /* 页面底色 / 输入框与嵌入面板深底 */
+  --bg-card:#161b22;      /* 卡片 / 浮层 */
+  --bg-inset:#21262d;     /* 次级底：表头、开关、进度槽、code */
+  --bg-hover:#1c2128;     /* 表格行悬停 */
+  --border:#30363d;
+  --shadow:rgba(0,0,0,.6);
+  --text:#c9d1d9;
+  --text-strong:#e6edf3;
+  --text-muted:#8b949e;
+  --text-dim:#484f58;
+  --accent:#58a6ff;       /* 强调蓝：focus 链接 loading 等 */
+  --accent-solid:#1f6feb; /* 实心强调块：方向切换选中 帮助球悬停 */
+  --ok:#3fb950;           /* 成功绿文本 徽标 */
+  --ok-solid:#238636;     /* 主按钮底色 */
+  --ok-hover:#2ea043;
+  --err:#f85149;          /* 错误红文本 徽标 */
+  --err-hover:#f85149;    /* 危险按钮悬停 */
+  --err-solid:#da3633;
+  --warn:#d29922;
+  --cyan:#39c5cf;         /* 日志分类 SCAN */
+  --violet:#bc8cff;       /* 日志分类 BLACKLIST */
+}
+html[data-theme="light"]{
+  color-scheme:light;
+  --bg:#ffffff;
+  --bg-card:#f6f8fa;
+  --bg-inset:#eaeef2;
+  --bg-hover:#f3f4f6;
+  --border:#d0d7de;
+  --shadow:rgba(31,35,40,.18);
+  --text:#1f2328;
+  --text-strong:#1f2328;
+  --text-muted:#656d76;
+  --text-dim:#8c959f;
+  --accent:#0969da;
+  --accent-solid:#0969da;
+  --ok:#1a7f37;
+  --ok-solid:#1f883d;
+  --ok-hover:#1a7f37;
+  --err:#cf222e;
+  --err-hover:#a40626;
+  --err-solid:#cf222e;
+  --warn:#9a6700;
+  --cyan:#1b7c83;
+  --violet:#8250df;
+}
 /* 全局缩放系数：按参考站 benchmark.leoblack.top 实测字号比（表格 0.92rem≈14.7px vs 本应用 13px≈1.13）取 1.15；容器宽度不追平基准站 1320px；如需调整只改这一处 */
 html{zoom:1.15}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0d1117;color:#c9d1d9;min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .container{max-width:960px;margin:0 auto;padding:24px 16px}
-.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:20px;margin-bottom:16px}
-.card-title{font-size:13px;font-weight:600;color:#8b949e;margin-bottom:12px;letter-spacing:.3px}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:12px;letter-spacing:.3px}
 .input-group{margin-bottom:12px}
 .input-group:last-child{margin-bottom:0}
-.input-group label{display:block;font-size:13px;color:#8b949e;margin-bottom:4px;font-weight:500}
-.input-group input[type="text"]{width:100%;padding:10px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s}
-.input-group input[type="text"]:focus{border-color:#58a6ff}
-.input-group input[type="text"]::placeholder{color:#484f58}
-.input-group input[type="password"]{width:100%;padding:10px 12px;background:#0d1117;border:1px solid #30363d;border-radius:6px;color:#c9d1d9;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s}
-.input-group input[type="password"]:focus{border-color:#58a6ff}
-.input-group input[type="password"]::placeholder{color:#484f58}
+.input-group label{display:block;font-size:13px;color:var(--text-muted);margin-bottom:4px;font-weight:500}
+/* 统一控件皮肤：除勾选框外的所有 input 与 select 全命中，
+   未来新增 input 类型自动继承，不会再漏涂成系统默认白底 */
+.input-group input:not([type="checkbox"]):not([type="range"]),
+.input-group select{padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border-color .2s}
+.input-group select{cursor:pointer}
+.input-group input:not([type="checkbox"]):not([type="range"]):focus,
+.input-group select:focus{border-color:var(--accent)}
+.input-group input:not([type="checkbox"]):not([type="range"])::placeholder{color:var(--text-dim)}
+/* 宽度单独控制：文本类占满整行，数字框保持默认窄宽与单位（ms/s）同行 */
+.input-group input[type="text"],
+.input-group input[type="password"],
+.input-group select{width:100%}
 .actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-primary{background:#238636;color:#fff}
-.btn-primary:hover:not(:disabled){background:#2ea043}
-.btn-danger{background:#da3633;color:#fff}
-.btn-danger:hover:not(:disabled){background:#f85149}
+.btn-primary{background:var(--ok-solid);color:#fff}
+.btn-primary:hover:not(:disabled){background:var(--ok-hover)}
+.btn-danger{background:var(--err-solid);color:#fff}
+.btn-danger:hover:not(:disabled){background:var(--err-hover)}
 .btn:active:not(:disabled){transform:scale(.97)}
-.toggle-group{display:flex;align-items:center;gap:8px;font-size:13px;color:#8b949e;cursor:pointer;user-select:none;padding:6px 12px;background:#21262d;border-radius:6px;border:1px solid #30363d}
-.toggle-group input[type="checkbox"]{width:16px;height:16px;accent-color:#58a6ff;cursor:pointer}
-.status{min-height:24px;font-size:14px;color:#8b949e;margin-bottom:12px;padding:8px 12px;background:#0d1117;border-radius:6px;border:1px solid #30363d;transition:color .3s,border-color .3s}
-.status.success{color:#3fb950;border-color:#238636}
-.status.error{color:#f85149;border-color:#da3633}
-.status.loading{color:#58a6ff;border-color:#58a6ff}
-.table-wrap{overflow-x:auto;border:1px solid #30363d;border-radius:6px}
+.toggle-group{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-muted);cursor:pointer;user-select:none;padding:6px 12px;background:var(--bg-inset);border-radius:6px;border:1px solid var(--border)}
+.toggle-group input[type="checkbox"]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.status{min-height:24px;font-size:14px;color:var(--text-muted);margin-bottom:12px;padding:8px 12px;background:var(--bg);border-radius:6px;border:1px solid var(--border);transition:color .3s,border-color .3s}
+.status.success{color:var(--ok);border-color:var(--ok-solid)}
+.status.error{color:var(--err);border-color:var(--err-solid)}
+.status.loading{color:var(--accent);border-color:var(--accent)}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:6px}
 table{width:100%;border-collapse:collapse;font-size:13px}
-thead{background:#21262d}
-th{text-align:left;padding:10px 12px;color:#8b949e;font-weight:600;border-bottom:1px solid #30363d;white-space:nowrap}
-td{padding:8px 12px;border-bottom:1px solid #21262d;vertical-align:middle}
+thead{background:var(--bg-inset)}
+th{text-align:left;padding:10px 12px;color:var(--text-muted);font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--bg-inset);vertical-align:middle}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:#1c2128}
+tr:hover td{background:var(--bg-hover)}
 tr.row-blacklisted{opacity:.55}
 .filename{font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:13px;word-break:break-all}
-.file-hash{font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:11px;color:#8b949e}
-.summary{font-size:14px;color:#c9d1d9;margin-bottom:12px;padding:12px 16px;background:#0d1117;border-radius:6px;border:1px solid #30363d;text-align:center}
-.progress{background:#0d1117;border-radius:6px;padding:12px 16px;margin-bottom:12px;border:1px solid #30363d;display:none}
+.file-hash{font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:11px;color:var(--text-muted)}
+.summary{font-size:14px;color:var(--text);margin-bottom:12px;padding:12px 16px;background:var(--bg);border-radius:6px;border:1px solid var(--border);text-align:center}
+.progress{background:var(--bg);border-radius:6px;padding:12px 16px;margin-bottom:12px;border:1px solid var(--border);display:none}
 .progress.active{display:block}
-.progress-bar{height:6px;background:#21262d;border-radius:3px;overflow:hidden;margin-bottom:8px}
-.progress-bar-fill{height:100%;background:#238636;width:0%;transition:width .3s;border-radius:3px}
-.progress-text{font-size:13px;color:#8b949e}
-.empty-state{text-align:center;padding:40px 20px;color:#484f58;font-size:14px}
-.input-hint{font-size:12px;color:#484f58;margin-top:2px}
-.input-badge{font-size:11px;margin-top:2px;color:#484f58;min-height:14px}
-.input-badge.http{color:#58a6ff}
-.input-badge.ftp{color:#d29922}
-.input-badge.local{color:#3fb950}
-.input-badge.invalid{color:#f85149}
-.input-badge.error{color:#f85149}
-.input-badge.success{color:#3fb950}
+.progress-bar{height:6px;background:var(--bg-inset);border-radius:3px;overflow:hidden;margin-bottom:8px}
+.progress-bar-fill{height:100%;background:var(--ok-solid);width:0%;transition:width .3s;border-radius:3px}
+.progress-text{font-size:13px;color:var(--text-muted)}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-dim);font-size:14px}
+.input-hint{font-size:12px;color:var(--text-dim);margin-top:2px}
+.input-badge{font-size:11px;margin-top:2px;color:var(--text-dim);min-height:14px}
+.input-badge.http{color:var(--accent)}
+.input-badge.ftp{color:var(--warn)}
+.input-badge.local{color:var(--ok)}
+.input-badge.invalid{color:var(--err)}
+.input-badge.error{color:var(--err)}
+.input-badge.success{color:var(--ok)}
 /* ─── Stats bar ─── */
 .stats{display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap}
-.stat-item{flex:1;min-width:180px;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:10px 14px}
-.stat-label{font-size:11px;color:#8b949e;margin-bottom:2px;letter-spacing:.3px}
-.stat-value{font-size:18px;font-weight:600;color:#e6edf3}
-.stat-sub{font-size:12px;color:#484f58;margin-top:2px}
+.stat-item{flex:1;min-width:180px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px}
+.stat-label{font-size:11px;color:var(--text-muted);margin-bottom:2px;letter-spacing:.3px}
+.stat-value{font-size:18px;font-weight:600;color:var(--text-strong)}
+.stat-sub{font-size:12px;color:var(--text-dim);margin-top:2px}
 /* ─── Direction toggle ─── */
-.dir-group{display:flex;background:#21262d;border:1px solid #30363d;border-radius:6px;overflow:hidden}
-.dir-btn{padding:8px 16px;font-size:13px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-family:inherit;transition:all .2s}
-.dir-btn.active{background:#1f6feb;color:#fff}
-.dir-btn:not(.active):hover{color:#c9d1d9}
-.dir-btn:first-child{border-right:1px solid #30363d}
+.dir-group{display:flex;background:var(--bg-inset);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.dir-btn{padding:8px 16px;font-size:13px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-family:inherit;transition:all .2s}
+.dir-btn.active{background:var(--accent-solid);color:#fff}
+.dir-btn:not(.active):hover{color:var(--text)}
+.dir-btn:first-child{border-right:1px solid var(--border)}
 #syncBtn{margin-top:0}
 .hidden{display:none}
-input[type="checkbox"]{accent-color:#58a6ff;cursor:pointer}
+input[type="checkbox"]{accent-color:var(--accent);cursor:pointer}
 /* ─── Tabs ─── */
-.tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #30363d;flex-wrap:wrap}
-.tab-btn{padding:8px 18px;font-size:13px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;transition:all .2s}
-.tab-btn:hover{color:#c9d1d9}
-.tab-btn.active{color:#e6edf3;border-bottom-color:#58a6ff}
+.tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.tab-btn{padding:8px 18px;font-size:13px;border:none;background:transparent;color:var(--text-muted);cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;transition:all .2s}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--text-strong);border-bottom-color:var(--accent)}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
 /* ─── Thumbnail ─── */
 .thumb-wrap{width:var(--thumb-size,48px);height:var(--thumb-size,48px);flex-shrink:0}
-.thumb{width:var(--thumb-size,48px);height:var(--thumb-size,48px);object-fit:cover;border-radius:4px;display:block;background:#0d1117}
+.thumb{width:var(--thumb-size,48px);height:var(--thumb-size,48px);object-fit:cover;border-radius:4px;display:block;background:var(--bg)}
 /* ─── Preview panel ─── */
-.preview-panel{display:none;position:fixed;z-index:1000;background:#161b22;border:1px solid #30363d;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.6);overflow:hidden;pointer-events:none;max-width:420px}
+.preview-panel{display:none;position:fixed;z-index:1000;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px var(--shadow);overflow:hidden;pointer-events:none;max-width:420px}
 .preview-panel.active{display:block}
 .preview-panel img{display:block;max-width:400px;max-height:480px;object-fit:contain}
-.preview-panel .preview-name{padding:8px 12px;font-size:12px;color:#8b949e;border-top:1px solid #30363d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview-panel .preview-name{padding:8px 12px;font-size:12px;color:var(--text-muted);border-top:1px solid var(--border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* ─── Animations ─── */
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
@@ -283,28 +336,30 @@ input[type="checkbox"]{accent-color:#58a6ff;cursor:pointer}
 #syncBtn.slide-in{animation:slideDown .3s ease-out}
 tr.row-enter{animation:fadeIn .35s ease-out both}
 /* ─── Help tooltips ─── */
-.help-toggle{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#30363d;color:#8b949e;font-size:11px;cursor:pointer;margin-left:4px;transition:all .2s;vertical-align:middle;line-height:18px;font-style:normal;font-weight:600}
-.help-toggle:hover{background:#1f6feb;color:#fff}
-.help-text{font-size:12px;color:#8b949e;background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:8px 12px;margin-top:4px;line-height:1.7}
-.help-text code{background:#21262d;padding:1px 5px;border-radius:3px;font-size:11px;color:#c9d1d9}
+.help-toggle{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--border);color:var(--text-muted);font-size:11px;cursor:pointer;margin-left:4px;transition:all .2s;vertical-align:middle;line-height:18px;font-style:normal;font-weight:600}
+.help-toggle:hover{background:var(--accent-solid);color:#fff}
+.help-text{font-size:12px;color:var(--text-muted);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-top:4px;line-height:1.7}
+.help-text code{background:var(--bg-inset);padding:1px 5px;border-radius:3px;font-size:11px;color:var(--text)}
 .help-text ol{margin:4px 0 0 18px;padding:0}
 .help-text li{margin-bottom:3px}
-.pixiv-status{font-size:13px;color:#8b949e;margin-left:12px;transition:color .2s}
-.pixiv-status.loading{color:#58a6ff}
-.pixiv-status.success{color:#3fb950}
-.pixiv-status.error{color:#f85149}
-.pixiv-stats{display:flex;gap:16px;padding:10px 14px;background:#0d1117;border:1px solid #30363d;border-radius:6px;font-size:13px;color:#8b949e;flex-wrap:wrap;margin-top:12px}
-.pixiv-stats strong{color:#e6edf3;font-weight:600}
+.help-text a{color:var(--accent)}
+.pixiv-status{font-size:13px;color:var(--text-muted);margin-left:12px;transition:color .2s}
+.pixiv-status.loading{color:var(--accent)}
+.pixiv-status.success{color:var(--ok)}
+.pixiv-status.error{color:var(--err)}
+.pixiv-stats{display:flex;gap:16px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text-muted);flex-wrap:wrap;margin-top:12px}
+.pixiv-stats strong{color:var(--text-strong);font-weight:600}
 /* ─── Log panel ─── */
+.log-box{background:var(--bg);border:1px solid var(--border);border-radius:6px;height:480px;overflow-y:auto;padding:10px 12px;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;line-height:1.6}
 .log-line{display:block;white-space:pre-wrap;word-break:break-all}
-.log-line .cat-SCAN{color:#39c5cf}
-.log-line .cat-HASH{color:#d29922}
-.log-line .cat-SYNC{color:#58a6ff}
-.log-line .cat-IMAGE{color:#8b949e}
-.log-line .cat-DONE{color:#3fb950}
-.log-line .cat-ERROR{color:#f85149}
-.log-line .cat-INFO{color:#c9d1d9}
-.log-line .cat-BLACKLIST{color:#bc8cff}
+.log-line .cat-SCAN{color:var(--cyan)}
+.log-line .cat-HASH{color:var(--warn)}
+.log-line .cat-SYNC{color:var(--accent)}
+.log-line .cat-IMAGE{color:var(--text-muted)}
+.log-line .cat-DONE{color:var(--ok)}
+.log-line .cat-ERROR{color:var(--err)}
+.log-line .cat-INFO{color:var(--text)}
+.log-line .cat-BLACKLIST{color:var(--violet)}
 </style>
 </head>
 <body>
@@ -387,7 +442,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
       <div id="helpUid" class="help-text hidden">
         <strong>如何获取 Pixiv UID：</strong>
         <ol>
-          <li>打开 <a href="https://www.pixiv.net" target="_blank" style="color:#58a6ff">pixiv.net</a> 并登录</li>
+          <li>打开 <a href="https://www.pixiv.net" target="_blank">pixiv.net</a> 并登录</li>
           <li>点击右上角头像进入个人主页</li>
           <li>浏览器地址栏 <code>https://www.pixiv.net/users/</code><strong>12345678</strong> 末尾的数字即是 UID</li>
         </ol>
@@ -402,12 +457,12 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
       <div id="helpPhpsessid" class="help-text hidden">
         <strong>如何获取 PHPSESSID：</strong>
         <ol>
-          <li>在浏览器打开 <a href="https://www.pixiv.net" target="_blank" style="color:#58a6ff">pixiv.net</a> 并登录账号</li>
+          <li>在浏览器打开 <a href="https://www.pixiv.net" target="_blank">pixiv.net</a> 并登录账号</li>
           <li>按 <code>F12</code> 打开开发者工具</li>
           <li>切换到 <code>Application</code> 标签 → 左侧 <code>Cookies</code> → <code>https://www.pixiv.net</code></li>
           <li>找到 <code>PHPSESSID</code> 这一行，复制其值（一串字母数字）</li>
         </ol>
-        <div style="margin-top:6px;color:#f85149;font-size:11px">⚠ PHPSESSID 相当于你的登录凭证，不会上传到任何第三方服务器</div>
+        <div style="margin-top:6px;color:var(--err);font-size:11px">⚠ PHPSESSID 相当于你的登录凭证，不会上传到任何第三方服务器</div>
       </div>
     </div>
     <div class="input-group" style="margin-bottom:0">
@@ -439,7 +494,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
             <tr>
               <th style="width:40px">#</th>
               <th>范围</th>
-              <th style="width:76px">操作</th>
+              <th style="width:60px">操作</th>
               <th style="width:100px">ID</th>
               <th style="width:110px">分p</th>
             </tr>
@@ -456,9 +511,21 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
     <div class="card">
       <div class="card-title">界面设置</div>
       <div class="input-group">
+        <label for="settingTheme">界面主题</label>
+        <select id="settingTheme">
+          <option value="0">深色（默认）</option>
+          <option value="1">浅色</option>
+        </select>
+      </div>
+      <div class="input-group">
         <label for="settingThumbSize">缩略图尺寸</label>
-        <input type="range" id="settingThumbSize" min="16" max="128" step="4" style="width:100%">
-        <span id="settingThumbSizeVal"></span>px
+        <select id="settingThumbSize">
+          <option value="16">特小（16px）</option>
+          <option value="24">小（24px）</option>
+          <option value="48">标准（48px）</option>
+          <option value="64">大（64px）</option>
+          <option value="96">特大（96px）</option>
+        </select>
       </div>
       <div class="input-group">
         <label for="settingPreviewDelay">预览悬浮延迟</label>
@@ -496,7 +563,7 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
         <button class="btn" id="logPauseBtn">暂停</button>
         <button class="btn btn-danger" id="logClearBtn">清空</button>
       </div>
-      <div id="logList" style="background:#0d1117;border:1px solid #30363d;border-radius:6px;height:480px;overflow-y:auto;padding:10px 12px;font-family:'SFMono-Regular',Consolas,monospace;font-size:12px;line-height:1.6"></div>
+      <div id="logList" class="log-box"></div>
     </div>
   </section>
   </div>
@@ -567,6 +634,12 @@ let progressOwner = null; // 进度条归属: 'hash' | 'scan' | 'sync' | null（
 // ─── Config auto-fill & save ───────────────────────────────────
 let globalConfig = null;   // 供设置 tab / 预览延迟 / 缩略图尺寸读取
 
+function applyTheme(light) {
+  // 日间模式开关: html[data-theme=light] 触发 CSS 浅色变量覆盖层
+  if (light) document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+}
+
 async function loadConfig() {
   try {
     const res = await fetch('/api/config');
@@ -580,6 +653,7 @@ async function loadConfig() {
     // 缩略图尺寸联动: CSS 变量 --thumb-size
     const ts = parseInt(cfg.thumbnailSize) || 48;
     document.documentElement.style.setProperty('--thumb-size', ts + 'px');
+    applyTheme(cfg.lightTheme);
     // 设置 tab 控件填充
     fillSettingsControls();
   } catch (e) {
@@ -599,6 +673,7 @@ async function saveConfig() {
     previewDelay: settingPreviewDelay.value,
     pixivInterval: settingPixivInterval.value,
     maxRows: settingMaxRows.value,
+    lightTheme: settingTheme.value === '1' ? 1 : 0,
   };
   const _p = document.getElementById('pixivPhpsessid').value.trim();
   if (_p) data.PHPSESSID = _p;
@@ -855,7 +930,7 @@ function renderTable() {
     html += '<td class="file-hash' + (hashToggle.checked ? '' : ' hidden') + '">' + (f.hash || '-') + '</td>';
     html += '</tr>';
   });
-  if (currentFiles.length > RENDER_LIMIT) { html += '<tr><td colspan="6" style="padding:10px;text-align:center;color:#8b949e">仅显示前 ' + RENDER_LIMIT + ' 行（共 ' + currentFiles.length + ' 个文件，同步不受影响）</td></tr>'; }
+  if (currentFiles.length > RENDER_LIMIT) { html += '<tr><td colspan="6" style="padding:10px;text-align:center;color:var(--text-muted)">仅显示前 ' + RENDER_LIMIT + ' 行（共 ' + currentFiles.length + ' 个文件，同步不受影响）</td></tr>'; }
   thumbObserver.disconnect();
   fileList.innerHTML = html;
 
@@ -1186,7 +1261,7 @@ function renderPixivResult(summary, matched) {
       html += '<tr>';
       html += '<td>' + (i + 1) + '</td>';
       html += '<td class="filename">' + escapeHtml(f.illust_id + '_' + f.range) + '</td>';
-      html += '<td><button class="btn blk-add" style="padding:4px 10px;font-size:12px" data-id="' + escapeHtml(f.illust_id) + '">加黑名单</button></td>';
+      html += '<td><button class="btn blk-add" style="padding:2px 7px;font-size:11px" data-id="' + escapeHtml(f.illust_id) + '">加黑名单</button></td>';
       // escapeHtml 基于 textContent→innerHTML，不转义引号；href 属性上下文须再补 &quot;（防 " 逃逸属性注入）
       html += '<td><a href="' + escapeHtml('https://www.pixiv.net/artworks/' + f.illust_id).replace(/"/g, '&quot;') + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(f.illust_id).replace(/"/g, '&quot;') + '</a></td>';
       html += '<td>已有' + f.saved_pages + '张/共' + f.pageCount + '张</td>';
@@ -1220,7 +1295,7 @@ function renderPixivResult(summary, matched) {
       });
     });
   } else {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#484f58;padding:20px">没有缺失作品</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:20px">没有缺失作品</td></tr>';
   }
   document.getElementById('pixivResult').classList.remove('hidden');
   if (matched.length > 0) {
@@ -1309,27 +1384,38 @@ document.getElementById('logClearBtn').addEventListener('click', async function(
 
 // ─── 更多设置 tab（控件持久化 + 黑名单管理）───────────────────────
 const settingThumbSize = document.getElementById('settingThumbSize');
-const settingThumbSizeVal = document.getElementById('settingThumbSizeVal');
+const settingTheme = document.getElementById('settingTheme');
 const settingPreviewDelay = document.getElementById('settingPreviewDelay');
 const settingPixivInterval = document.getElementById('settingPixivInterval');
 const settingMaxRows = document.getElementById('settingMaxRows');
 
+// 缩略图尺寸档位（与 settingThumbSize 下拉选项一致）
+const THUMB_PRESETS = [16, 24, 48, 64, 96];
+
 function fillSettingsControls() {
   const cfg = globalConfig || {};
+  // 历史滑条遗留的档位外数值: 动态补"自定义"选项保证回显（loadConfig 启动时只调用一次）
+  if (cfg.thumbnailSize != null && !THUMB_PRESETS.includes(parseInt(cfg.thumbnailSize))) {
+    const opt = document.createElement('option');
+    opt.value = cfg.thumbnailSize;
+    opt.textContent = '自定义（' + cfg.thumbnailSize + 'px）';
+    settingThumbSize.appendChild(opt);
+  }
   settingThumbSize.value = cfg.thumbnailSize != null ? cfg.thumbnailSize : 48;
-  settingThumbSizeVal.textContent = settingThumbSize.value;
   settingPreviewDelay.value = cfg.previewDelay != null ? cfg.previewDelay : 500;
   settingPixivInterval.value = cfg.pixivInterval != null ? cfg.pixivInterval : 0.8;
   settingMaxRows.value = cfg.maxRows != null ? cfg.maxRows : 1000;
+  settingTheme.value = cfg.lightTheme ? '1' : '0';
 }
 
-// 缩略图滑块: 实时写 --thumb-size, blur/change 时保存
-settingThumbSize.addEventListener('input', function() {
-  const v = this.value;
-  settingThumbSizeVal.textContent = v;
-  document.documentElement.style.setProperty('--thumb-size', v + 'px');
+// 缩略图/主题下拉: change 即联动生效, 持久化由下方统一 blur/change 绑定完成
+settingThumbSize.addEventListener('change', function() {
+  document.documentElement.style.setProperty('--thumb-size', this.value + 'px');
 });
-[settingThumbSize, settingPreviewDelay, settingPixivInterval, settingMaxRows].forEach(el => {
+settingTheme.addEventListener('change', function() {
+  applyTheme(this.value === '1');
+});
+[settingThumbSize, settingTheme, settingPreviewDelay, settingPixivInterval, settingMaxRows].forEach(el => {
   el.addEventListener('blur', saveConfig);
   el.addEventListener('change', saveConfig);
 });
@@ -1349,11 +1435,11 @@ async function loadBlacklistUI() {
     const data = await res.json();
     const ids = data.ids || [];
     if (ids.length === 0) {
-      blacklistList.innerHTML = '<div style="color:#484f58;font-size:13px;padding:8px 0">黑名单为空</div>';
+      blacklistList.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px 0">黑名单为空</div>';
       return;
     }
     blacklistList.innerHTML = ids.map(id =>
-      '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid #21262d;font-family:monospace;font-size:13px">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--bg-inset);font-family:monospace;font-size:13px">' +
       '<span>' + escapeHtml(id) + '</span>' +
       '<button class="btn btn-danger" style="padding:4px 12px;font-size:12px" data-remove="' + escapeHtml(id) + '">删除</button>' +
       '</div>'

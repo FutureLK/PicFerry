@@ -1,6 +1,6 @@
 # docs/api.md — API 端点契约
 
-`server.py` HTTP 服务的全部端点。所有 `/api/*` 请求必须先通过 `_check_origin`（`server.py:2007`）同源校验，否则返回 403。
+`server.py` HTTP 服务的全部端点。所有 `/api/*` 请求必须先通过 `_check_origin`（`server.py:2158`）同源校验，否则返回 403。
 
 > 目标读者：人类 + AI。AI 新增端点时请走 `docs/guides/adding-an-api.md` 的流程，并同步更新本文档。
 > 行号为编写时快照，定位源码请以符号名为准。
@@ -25,7 +25,7 @@
 | `/api/logs` | GET | `since` | 增量拉取日志（环形缓冲） | `_handle_logs` |
 | `/api/logs/clear` | POST | — | 清空内存日志缓冲（不动 `sync.log`） | `_handle_logs_clear` |
 | `/api/config` | GET | — | 读取配置（PHPSESSID 不回显） | `_handle_config` |
-| `/api/config/save` | POST | 全部配置字段 | 保存配置到 `config.ini` | `_handle_config_save`(2347) |
+| `/api/config/save` | POST | 全部配置字段 | 保存配置到 `config.ini` | `_handle_config_save`(2498) |
 | `/api/pixiv/bookmarks` | POST | `uid`, `phpsessid`, `path`, `limit?` | 启动 Pixiv 收藏查重（后台 Job） | `_handle_pixiv_bookmarks`(2168) |
 | `/api/pixiv/bookmarks/stop` | POST | — | 请求终止当前 Job | `_handle_pixiv_stop`(2205) |
 | `/api/pixiv/job` | GET | — | 轮询 Job 状态（不含 result） | `_handle_pixiv_job`(2210) |
@@ -65,7 +65,7 @@
 ### POST `/api/config/save`
 
 **请求体**：JSON，字段见 `docs/settings.md`。空值语义：PHPSESSID 留空保留原值；其余留空回落默认。
-**响应**：`{"ok": true}`（参考 `_handle_config_save`，`server.py:2347`）
+**响应**：`{"ok": true}`（参考 `_handle_config_save`，`server.py:2498`）
 
 ### POST `/api/pixiv/bookmarks`
 
@@ -99,7 +99,7 @@ Job 状态机：`idle | fetching | scanning | matching | done | stopped | error`
 
 ## 安全
 
-- **同源闸门**：`_check_origin`（`server.py:2007`）校验 Origin/Referer 与 Host 一致；`allowLan=0` 时额外校验 Host ∈ `{127.0.0.1, localhost, ::1}`（防 DNS rebinding）。所有 `/api/*`（含 OPTIONS 预检）必须经过，新端点不得绕过。
+- **同源闸门**：`_check_origin`（`server.py:2158`）校验 Origin/Referer 与 Host 一致；`allowLan=0` 时额外校验 Host ∈ `{127.0.0.1, localhost, ::1}`（防 DNS rebinding）。所有 `/api/*`（含 OPTIONS 预检）必须经过，新端点不得绕过。
 - **路径净化**：`/api/copy` 写本地时经 `_sanitize_rel_path` + `_check_local_base` + `_check_realpath_within` 防目录穿越；未声明的本地基址读写被拒（`_declared_local_bases`，`server.py:1564`）。
 - **PHPSESSID**：任何端点不回显明文。
 
@@ -109,7 +109,7 @@ Job 状态机：`idle | fetching | scanning | matching | done | stopped | error`
 
 # English
 
-Contract for every `/api/*` endpoint. All `/api/*` requests must pass the same-origin check `_check_origin` (`server.py:2007`) first, or get a 403.
+Contract for every `/api/*` endpoint. All `/api/*` requests must pass the same-origin check `_check_origin` (`server.py:2158`) first, or get a 403.
 
 ## Conventions
 
@@ -131,7 +131,7 @@ Contract for every `/api/*` endpoint. All `/api/*` requests must pass the same-o
 | `/api/logs` | GET | `since` | Incremental log polling (ring buffer) | `_handle_logs` |
 | `/api/logs/clear` | POST | — | Clear in-memory log buffer (not `sync.log`) | `_handle_logs_clear` |
 | `/api/config` | GET | — | Read config (PHPSESSID never echoed) | `_handle_config` |
-| `/api/config/save` | POST | all fields | Save config to `config.ini` | `_handle_config_save`(2347) |
+| `/api/config/save` | POST | all fields | Save config to `config.ini` | `_handle_config_save`(2498) |
 | `/api/pixiv/bookmarks` | POST | `uid`, `phpsessid`, `path`, `limit?` | Start Pixiv dedup job (background) | `_handle_pixiv_bookmarks`(2168) |
 | `/api/pixiv/bookmarks/stop` | POST | — | Request job stop | `_handle_pixiv_stop`(2205) |
 | `/api/pixiv/job` | GET | — | Poll job status (no result) | `_handle_pixiv_job`(2210) |
@@ -143,6 +143,6 @@ Contract for every `/api/*` endpoint. All `/api/*` requests must pass the same-o
 
 ## Security
 
-- **Same-origin gate**: `_check_origin` (`server.py:2007`) — Origin/Referer must match Host; with `allowLan=0` Host must be in `{127.0.0.1, localhost, ::1}` (DNS-rebinding guard). Every `/api/*` request (including OPTIONS) must pass it; new endpoints must not bypass it.
+- **Same-origin gate**: `_check_origin` (`server.py:2158`) — Origin/Referer must match Host; with `allowLan=0` Host must be in `{127.0.0.1, localhost, ::1}` (DNS-rebinding guard). Every `/api/*` request (including OPTIONS) must pass it; new endpoints must not bypass it.
 - **Path sanitization**: local writes in `/api/copy` go through `_sanitize_rel_path` + `_check_local_base` + `_check_realpath_within` (directory-traversal guard); undeclared local bases are rejected (`_declared_local_bases`, `server.py:1564`).
 - **PHPSESSID**: never echoed by any endpoint.
