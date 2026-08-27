@@ -40,7 +40,7 @@ def runtime_dir():
 def _prepare_config_dir():
     """确定并创建运行时 config/ 目录。
     优先程序旁 config/; 所在位置只读(如 EXE 被放进 Program Files)时降级到
-    用户数据目录 %APPDATA%\\ImageSync\\config 并在 stderr 明示
+    用户数据目录 %APPDATA%\\PicFerry\\config 并在 stderr 明示
     (console_log 此时尚未定义)。不兜底将使未捕获异常让进程在打印首行日志前闪退。"""
     primary = os.path.join(runtime_dir(), 'config')
     try:
@@ -50,7 +50,7 @@ def _prepare_config_dir():
         sys.stderr.write(f'警告: 无法在程序旁创建 config/ 目录({e})，已改用用户数据目录\n')
         sys.stderr.flush()
     base = os.environ.get('APPDATA') or os.path.expanduser('~')
-    fallback = os.path.join(base, 'ImageSync', 'config')
+    fallback = os.path.join(base, 'PicFerry', 'config')
     # 连用户目录都不可写属于环境级故障, 让异常带完整上下文自然抛出
     os.makedirs(fallback, exist_ok=True)
     return fallback
@@ -272,7 +272,7 @@ HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>图片同步</title>
+<title>PicFerry</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* ─── 主题变量 ─────────────────────────────────────────────
@@ -2704,7 +2704,7 @@ def main():
     bind_host = '0.0.0.0' if load_config().get('allowLan') else '127.0.0.1'
     server = ThreadedServer((bind_host, PORT), SyncHandler)
 
-    sys.stderr.write(f'图片同步 - LAN File Sync: http://127.0.0.1:{PORT}\n')
+    sys.stderr.write(f'PicFerry - LAN File Sync: http://127.0.0.1:{PORT}\n')
     sys.stderr.flush()
     console_log('DONE', '服务器就绪')
     console_log('DONE', '仅本机访问 127.0.0.1' if bind_host == '127.0.0.1' else '局域网访问已开启 0.0.0.0')

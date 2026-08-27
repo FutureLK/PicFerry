@@ -1,6 +1,6 @@
 # docs/guides/adding-an-api.md — 新增 API 端点
 
-给"图片同步"新增一个 `/api/*` 端点的完整流程。以新增端点 `GET /api/ping` 为例。
+给 PicFerry 新增一个 `/api/*` 端点的完整流程。以新增端点 `GET /api/ping` 为例。
 
 > 目标读者：AI。
 > 行号为编写时快照，定位源码请以符号名为准。

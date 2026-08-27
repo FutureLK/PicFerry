@@ -1,4 +1,4 @@
-# AGENTS.md — 图片同步
+# AGENTS.md — PicFerry
 
 > 本项目为个人自用工具，协作对象仅限作者本人与 AI。文档默认使用中文；AI 内部文档（操作指南、行为准则）允许英文原文。
 
@@ -7,7 +7,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 
 ## 1. 项目介绍
 
-局域网图片比对与传输工具（"图片同步"）。通过 HTTP / FTP / 本地磁盘路径连接两台设备，扫描图片列表、按文件名去重、一键同步；内置 Pixiv 收藏查重（分p级匹配 + 作品黑名单）。
+局域网图片比对与传输工具（"PicFerry"，界面中文）。通过 HTTP / FTP / 本地磁盘路径连接两台设备，扫描图片列表、按文件名去重、一键同步；内置 Pixiv 收藏查重（分p级匹配 + 作品黑名单）。
 
 - 仓库：`Pixiv-IMG-local-duplication`
 - 用户文档（人类视角）：`README.md`、`Python project/README.md`

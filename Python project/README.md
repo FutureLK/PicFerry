@@ -1,4 +1,4 @@
-# 图片同步
+# PicFerry
 
 局域网文件比对与传输工具。
 
@@ -8,10 +8,10 @@
 
 ### 方式一：EXE（推荐）
 
-从 [Releases 页面](https://github.com/FutureLK/Pixiv-IMG-local-duplication/releases) 下载最新版的 `图片同步.exe`，双击运行，浏览器自动打开。
+从 [Releases 页面](https://github.com/FutureLK/Pixiv-IMG-local-duplication/releases) 下载最新版的 `PicFerry.exe`，双击运行，浏览器自动打开。
 
 > 首次运行 Windows 可能提示安全警告，点击「更多信息」→「仍要运行」即可。
-> 配置文件 `config.ini` 与黑名单 `blacklist.csv` 存放在 EXE 旁的 `config/` 文件夹内（旧版本散落在同目录的文件会在首次启动时自动迁入）；程序所在位置只读无法创建该文件夹时，自动改存到用户数据目录 `%APPDATA%\ImageSync\config` 并在控制台提示。
+> 配置文件 `config.ini` 与黑名单 `blacklist.csv` 存放在 EXE 旁的 `config/` 文件夹内（旧版本散落在同目录的文件会在首次启动时自动迁入）；程序所在位置只读无法创建该文件夹时，自动改存到用户数据目录 `%APPDATA%\PicFerry\config` 并在控制台提示。
 
 ### 方式二：源码运行
 
@@ -116,10 +116,10 @@ lightTheme = 0
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --name "图片同步" server.py
+pyinstaller --onefile --name "PicFerry" server.py
 ```
 
-产出 `dist/图片同步.exe`，约 7 MB（以重建后实测为准），不依赖 Python 环境。EXE 模式下配置文件落在 EXE 旁的 `config/` 文件夹（非临时目录）。
+产出 `dist/PicFerry.exe`，约 7 MB（以重建后实测为准），不依赖 Python 环境。EXE 模式下配置文件落在 EXE 旁的 `config/` 文件夹（非临时目录）。
 
 ## API 接口
 
@@ -150,11 +150,11 @@ pyinstaller --onefile --name "图片同步" server.py
 ```
 ├── server.py          Python 服务器（内嵌 HTML/CSS/JS，单文件）
 ├── dist/
-│   └── 图片同步.exe     打包后的独立可执行文件 (~7 MB)
+│   └── PicFerry.exe     打包后的独立可执行文件 (~7 MB)
 ├── config/            运行时文件目录（自动创建）
 │   ├── config.ini     用户配置（自动生成/保存，不入库；旧版根目录文件自动迁入）
 │   └── blacklist.csv  Pixiv 黑名单（自动生成，不入库）
 └── README.md
 ```
 
-> 注：当前 `dist/图片同步.exe` 为 2026-08-12 旧构建（未含查重反转等更新），建议优先源码运行；重建前以源码行为为准。
+> 注：`dist/` 不入库，以上为重新打包说明；历史构建以 Releases 页面为准。

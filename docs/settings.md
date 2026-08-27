@@ -1,6 +1,6 @@
 # docs/settings.md — 配置参考
 
-`config.ini` 全部字段的说明。配置文件位于程序旁 `config/` 子目录（旧版根目录散落文件首次启动自动迁入；程序所在位置只读时自动降级到 `%APPDATA%\ImageSync\config`），启动时自动加载，修改输入框失焦后自动保存。
+`config.ini` 全部字段的说明。配置文件位于程序旁 `config/` 子目录（旧版根目录散落文件首次启动自动迁入；程序所在位置只读时自动降级到 `%APPDATA%\PicFerry\config`），启动时自动加载，修改输入框失焦后自动保存。
 
 > 目标读者：人类。AI 新增配置键时请走 `docs/guides/adding-a-setting.md` 的流程，并同步更新本文档。
 
@@ -69,7 +69,7 @@ lightTheme = 0
 
 ## 实现位置
 
-- 目录确定：`server.py:40 _prepare_config_dir`（程序旁不可写时降级 `%APPDATA%\ImageSync\config`）
+- 目录确定：`server.py:40 _prepare_config_dir`（程序旁不可写时降级 `%APPDATA%\PicFerry\config`）
 - 注册表：`server.py:78 _CONFIG_KEYS`（`key: (default, lo, hi, type)`）
 - 解析/钳制：`server.py:88 _parse_config_value`（含溢出值兜底）
 - 解析文件：`server.py:108 _parse_config_file`（语法损坏/BOM/坏编码显式区分于文件缺失）
@@ -84,7 +84,7 @@ lightTheme = 0
 
 # English
 
-Reference for every `config.ini` field. The file lives in the `config/` subfolder next to `server.py` (or the EXE) — falling back to `%APPDATA%\ImageSync\config` when that location is read-only; it is loaded at startup and saved automatically when a form input loses focus.
+Reference for every `config.ini` field. The file lives in the `config/` subfolder next to `server.py` (or the EXE) — falling back to `%APPDATA%\PicFerry\config` when that location is read-only; it is loaded at startup and saved automatically when a form input loses focus.
 
 ## Field Summary
 
@@ -113,7 +113,7 @@ Reference for every `config.ini` field. The file lives in the `config/` subfolde
 
 ## Implementation
 
-- Directory resolution: `server.py:40 _prepare_config_dir` (falls back to `%APPDATA%\ImageSync\config`)
+- Directory resolution: `server.py:40 _prepare_config_dir` (falls back to `%APPDATA%\PicFerry\config`)
 - Registry: `server.py:78 _CONFIG_KEYS`
 - Parse/clamp: `server.py:88 _parse_config_value` (overflow values included)
 - File parsing: `server.py:108 _parse_config_file` (corrupt/BOM/bad-encoding distinguished from missing)

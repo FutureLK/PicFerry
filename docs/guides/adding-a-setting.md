@@ -1,6 +1,6 @@
 # docs/guides/adding-a-setting.md — 新增配置键
 
-给"图片同步"新增一个可调配置键的完整流程。以新增键 `sampleSize` 为例。
+给 PicFerry 新增一个可调配置键的完整流程。以新增键 `sampleSize` 为例。
 
 > 目标读者：AI。
 > 行号为编写时快照，定位源码请以符号名为准。
@@ -75,7 +75,7 @@ _CONFIG_KEYS (server.py:50)  ← 注册默认值/范围/类型
 
 # English
 
-Full procedure for adding a configurable key to "图片同步". Example key: `sampleSize`.
+Full procedure for adding a configurable key to PicFerry. Example key: `sampleSize`.
 
 ## 0. Touch points
 
