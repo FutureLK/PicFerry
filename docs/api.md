@@ -80,7 +80,7 @@
 ### GET `/api/pixiv/job`
 
 Job 状态机：`idle | fetching | scanning | matching | done | stopped | error`（`run_pixiv_job`，`server.py:1863`）。
-**响应**：`{"status": "...", "progress": {"phase", "fetched", "total"}, "error": null|str, "summary": null|{total_bookmarks, local_count, missing_works, missing_pages}}`
+**响应**：`{"status": "...", "progress": {"phase", "fetched", "total"}, "error": null|str, "summary": null|{total_bookmarks, local_count, missing_works, missing_pages}}`——其中 `error` 文本经脱敏与截断（≤120 字符），不含本地路径等敏感细节
 
 ### GET `/api/pixiv/job/result`
 
@@ -138,7 +138,7 @@ Contract for every `/api/*` endpoint. All `/api/*` requests must pass the same-o
 | `/api/config/save` | POST | all fields | Save config to `config.ini` | `_handle_config_save`(2498) |
 | `/api/pixiv/bookmarks` | POST | `uid`, `phpsessid`, `path`, `limit?` | Start Pixiv dedup job (background) | `_handle_pixiv_bookmarks`(2168) |
 | `/api/pixiv/bookmarks/stop` | POST | — | Request job stop | `_handle_pixiv_stop`(2205) |
-| `/api/pixiv/job` | GET | — | Poll job status (no result) | `_handle_pixiv_job`(2210) |
+| `/api/pixiv/job` | GET | — | Poll job status (no result; error field sanitized+truncated) | `_handle_pixiv_job`(2210) |
 | `/api/pixiv/job/result` | GET | — | Final result (matched on done) | `_handle_pixiv_job_result`(2219) |
 | `/api/blacklist` | GET | — | Read blacklist IDs | `_handle_blacklist`(2225) |
 | `/api/blacklist/add` | POST | `id` | Add blacklist entry (ID or artwork link) | `_handle_blacklist_add`(2229) |

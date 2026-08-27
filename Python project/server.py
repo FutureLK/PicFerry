@@ -1822,10 +1822,16 @@ def _safe_error_text(e):
     return s[:120]
 
 def _sanitize_rel_path(name):
-    """拒绝绝对路径、盘符、`..` 组件、尾部空格/点的组件、Windows 保留设备名; 允许相对子目录（local_list 产出 rel 路径）"""
+    """拒绝绝对路径、盘符、`..` 组件、尾部空格/点的组件、Windows 保留设备名、
+    控制字符（\\r\\n 等防 FTP 拼接命令注入）、冒号（NTFS ADS 流语法; 盘符检查
+    已在前, 此处的冒号只会是流分隔符）; 允许相对子目录（local_list 产出 rel 路径）"""
     if not isinstance(name, str) or not name:
         raise ValueError('非法文件名')
     if os.path.isabs(name) or re.match(r'^[a-zA-Z]:', name):
+        raise ValueError('非法文件名')
+    if re.search(r'[\x00-\x1f]', name):
+        raise ValueError('非法文件名')
+    if ':' in name:
         raise ValueError('非法文件名')
     _reserved = {'CON', 'PRN', 'AUX', 'NUL'} | {f'COM{i}' for i in range(1, 10)} | {f'LPT{i}' for i in range(1, 10)}
     for part in name.replace('\\', '/').split('/'):
@@ -1860,6 +1866,9 @@ def _check_realpath_within(base, full):
     """最终读写路径的 realpath 必须仍在声明基座内（防基座内 junction 指向外部后越界读写）;
     normcase 与 _check_local_base 口径一致（Windows 大小写不敏感）"""
     rb = os.path.realpath(os.path.normcase(os.path.normpath(base)))
+    # 两侧都必须走同一"先解析后比较"管线(realpath 输出磁盘规范大小写),
+    # 此处【勿】对 rf 单独补 normcase——顺序不同会让一侧规范一侧小写,
+    # FUTURE~1 类短名目录下正当路径被误判越界(实测复盘结论)
     rf = os.path.realpath(full)
     if rf != rb and not rf.startswith(rb + os.sep):
         raise ValueError('路径越出声明基座')
@@ -2237,7 +2246,8 @@ def run_pixiv_job(uid, phpsessid, path, limit=0, fetch_fn=fetch_all_pixiv_bookma
                   result=missing)
     except Exception as e:
         console_log('ERROR', f'Pixiv 查重失败: {e}')
-        set_state(status='error', error=str(e))
+        # 入库前脱敏: OS 异常原文含引号本地路径/file: 前缀, 不应经轮询端点发往局域网
+        set_state(status='error', error=_safe_error_text(e))
 
 
 def _start_pixiv_job(uid, phpsessid, path, limit=0):
