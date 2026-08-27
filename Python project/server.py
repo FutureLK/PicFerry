@@ -286,9 +286,10 @@ tr.row-blacklisted{opacity:.55}
 .file-hash{font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:11px;color:var(--text-muted)}
 .progress{background:var(--bg);border-radius:6px;padding:12px 16px;margin-bottom:12px;border:1px solid var(--border);display:none}
 .progress.active{display:block}
-.progress-bar{height:6px;background:var(--bg-inset);border-radius:3px;overflow:hidden;margin-bottom:8px}
+.progress-bar{height:6px;background:var(--bg-inset);border-radius:3px;overflow:hidden}
 .progress-bar-fill{height:100%;background:var(--ok-solid);width:0%;transition:width .3s;border-radius:3px}
-.progress-text{font-size:13px;color:var(--text-muted)}
+.progress-text{font-size:13px;color:var(--text-muted);margin-top:8px}
+.progress-text:empty{display:none}   /* 无文字阶段(扫描/同步)不留死区: 进度框收窄且 bar 垂直居中 */
 .empty-state{text-align:center;padding:40px 20px;color:var(--text-dim);font-size:14px}
 .input-hint{font-size:12px;color:var(--text-dim);margin-top:2px}
 .input-badge{font-size:11px;margin-top:2px;color:var(--text-dim);min-height:14px}
