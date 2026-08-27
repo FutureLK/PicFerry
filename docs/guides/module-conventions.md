@@ -12,20 +12,20 @@
 | 1-24 | 导入（纯标准库） | 新 import 加到这里（**仅标准库**） |
 | 25-26 | `PORT=13826`、`IMAGE_EXTS` | 模块级常量加在附近 |
 | 28-210 | **配置系统**：目录降级 `_prepare_config_dir`(40) → 注册表 `_CONFIG_KEYS`(78) → 解析钳制 `_parse_config_value`(88) → `load_config`(139)/`save_config`(148)，后者原子写(.tmp+os.replace)、文件损坏时拒绝覆盖保存；解析兜住语法损坏/BOM/坏编码/溢出值 | **不要在这里塞业务逻辑** |
-| 212-267 | `console_log`(244)：stderr 彩色输出 + 内存环形缓冲（网页轮询用） | 日志相关工具函数 |
-| 269-1629 | **内嵌前端**：`HTML` 常量（整个网页 UI，含 CSS/JS）；改动后的视觉验证见本文档 §6 | 前端改动只在这一区域 |
-| 1671-1814 | 数据源：`ftp_list`(1671)/`ftp_download`(1712)/`ftp_upload`(1728)/`local_list`(1792) | 新的数据源读取函数 |
-| 1815+ | 本地路径净化：`_safe_error_text`(1817)/`_sanitize_rel_path`(1824)/`_declared_local_bases`(1846)/`_check_local_base`(1856)/`_check_realpath_within`(1865)，防目录穿越；扫描入口 `_assert_declared_scan_base`(1876) 与读链路同口径 | 路径安全相关 |
+| 212-268 | `console_log`(244)：stderr 彩色输出 + 内存环形缓冲（网页轮询用） | 日志相关工具函数 |
+| 270-1653 | **内嵌前端**：`HTML` 常量（整个网页 UI，含 CSS/JS）；改动后的视觉验证见本文档 §6 | 前端改动只在这一区域 |
+| 1695-1837 | 数据源：`ftp_list`(1695)/`ftp_download`(1712)/`ftp_upload`(1728)/`local_list`(1792) | 新的数据源读取函数 |
+| 1839+ | 本地路径净化：`_safe_error_text`(1841)/`_sanitize_rel_path`(1848)/`_declared_local_bases`(1870)/`_check_local_base`(1880)/`_check_realpath_within`(1889)，防目录穿越；扫描入口 `_assert_declared_scan_base`(1900) 与读链路同口径 | 路径安全相关 |
 | 2006+ | `fetch_all_pixiv_bookmark_ids`：Pixiv 收藏拉取（分页/黑名单/限量/可终止） | Pixiv 相关逻辑 |
-| 2131-2269 | **Pixiv 后台 Job 引擎（单槽）**：`pixiv_job` 状态字典(2131) → `run_pixiv_job`(2157) 状态机 `fetching→scanning→matching→done/stopped/error` → `_start_pixiv_job`(2253) 原子启动。关键时序：**每个昂贵阶段前先检查 `stop`** | 新的后台任务引擎放这类区域 |
-| 2271-2666 | **HTTP 层** `SyncHandler(BaseHTTPRequestHandler)`：`_send_json`(2277)/`_send_html`(2286)/`_send_error`(2294)/`_check_origin`(2302)/`do_OPTIONS`(2327)/`do_GET`(2335)/`do_POST`(2364) + 各 `_handle_*` 处理器 | 新 API handler 加在这里 |
+| 2155-2293 | **Pixiv 后台 Job 引擎（单槽）**：`pixiv_job` 状态字典(2155) → `run_pixiv_job`(2181) 状态机 `fetching→scanning→matching→done/stopped/error` → `_start_pixiv_job`(2277) 原子启动。关键时序：**每个昂贵阶段前先检查 `stop`** | 新的后台任务引擎放这类区域 |
+| 2295-2697 | **HTTP 层** `SyncHandler(BaseHTTPRequestHandler)`：`_send_json`(2302)/`_send_html`(2311)/`_send_error`(2319)/`_check_origin`(2302)/`do_OPTIONS`(2352)/`do_GET`(2360)/`do_POST`(2389) + 各 `_handle_*` 处理器 | 新 API handler 加在这里 |
 | 2668+ | `ThreadedServer`：多线程 HTTP 服务器 + `__main__` 启动（自动开浏览器） | 启动逻辑 |
 
 ## 2. 关键约定
 
-- 新增 API 端点：在 `do_GET`(2335) 或 `do_POST`(2364) 加 elif 分支 → 写 `_handle_*` 方法 → 更新 `docs/api.md`。
+- 新增 API 端点：在 `do_GET`(2360) 或 `do_POST`(2389) 加 elif 分支 → 写 `_handle_*` 方法 → 更新 `docs/api.md`。
 - 新增配置：在 `_CONFIG_KEYS`(78) 注册（若需范围/类型）→ `load_config`/`save_config` 自动覆盖（数值键）→ 前端表单同步 → 更新 `docs/settings.md`。
-- 请求体为 JSON 时：读 `Content-Length` → `self.rfile.read` → `json.loads`，参考 `_handle_pixiv_bookmarks`(2469)。
+- 请求体为 JSON 时：读 `Content-Length` → `self.rfile.read` → `json.loads`，参考 `_handle_pixiv_bookmarks`(2494)。
 - 所有 API 响应 JSON 用 `ensure_ascii=False`，中文直接输出。
 
 ## 3. 风格约定
@@ -44,8 +44,8 @@
 
 ## 5. 后台任务约定（单槽引擎）
 
-需要后台任务时，**复制而不是重写**现有 Pixiv Job 引擎模式（`server.py:2131-2269`）：
-- 状态字典 + `stop` 事件 + `lock`（参考 `pixiv_job`，`server.py:2131`）。
+需要后台任务时，**复制而不是重写**现有 Pixiv Job 引擎模式（`server.py:2155-2293`）：
+- 状态字典 + `stop` 事件 + `lock`（参考 `pixiv_job`，`server.py:2155`）。
 - 状态机每个昂贵阶段前**先检查 `stop`**（时序不可颠倒，见 `run_pixiv_job` 注释）。
 - 原子启动 check-and-set（`_start_pixiv_job`，`server.py:2243`），并发启动返回"已有任务在运行"。
 - 状态/结果拆分两个端点暴露（`/api/pixiv/job` vs `/api/pixiv/job/result`）。
@@ -86,20 +86,20 @@
 | 1-24 | Imports (stdlib only) | New imports go here (stdlib only) |
 | 25-26 | `PORT=13826`, `IMAGE_EXTS` | Module-level constants |
 | 28-210 | **Config system**: `_CONFIG_KEYS` registry(78) → `_parse_config_value`(88) → `load_config`(139)/`save_config`(148). Corrupt config falls back to defaults, never raises | **No business logic here** |
-| 212-267 | `console_log`(244): file + stderr + ring buffer (web polling) | Logging utilities |
-| 269-1629 | **Embedded frontend**: `HTML` constant (entire UI, CSS/JS, ); visual verification after changes: see §6 | All frontend changes |
-| 1671-1814 | Data sources: `ftp_list`(1671)/`ftp_download`(1712)/`ftp_upload`(1728)/`local_list`(1792) | New data-source readers |
-| 1815+ | Local-path sanitization: `_safe_error_text`(1817)/`_sanitize_rel_path`(1824)/`_declared_local_bases`(1846)/`_check_local_base`(1856)/`_check_realpath_within`(1865), traversal guard | Path-safety code |
+| 212-268 | `console_log`(244): file + stderr + ring buffer (web polling) | Logging utilities |
+| 270-1653 | **Embedded frontend**: `HTML` constant (entire UI, CSS/JS, ); visual verification after changes: see §6 | All frontend changes |
+| 1695-1837 | Data sources: `ftp_list`(1695)/`ftp_download`(1712)/`ftp_upload`(1728)/`local_list`(1792) | New data-source readers |
+| 1839+ | Local-path sanitization: `_safe_error_text`(1841)/`_sanitize_rel_path`(1848)/`_declared_local_bases`(1870)/`_check_local_base`(1880)/`_check_realpath_within`(1889), traversal guard | Path-safety code |
 | 2006+ | `fetch_all_pixiv_bookmark_ids`: Pixiv bookmark fetching (paging/blacklist/limit/stoppable) | Pixiv logic |
-| 2131-2269 | **Pixiv Job engine (single-slot)**: `pixiv_job` state dict(2131) → `run_pixiv_job`(2157) state machine `fetching→scanning→matching→done/stopped/error` → `_start_pixiv_job`(2253) atomic start. Key timing: **check `stop` before every expensive phase** | New background-task engines |
-| 2271-2666 | **HTTP layer** `SyncHandler(BaseHTTPRequestHandler)`: `_send_json`(2277)/`_send_html`(2286)/`_send_error`(2294)/`_check_origin`(2302)/`do_OPTIONS`(2327)/`do_GET`(2335)/`do_POST`(2364) + `_handle_*` handlers | New API handlers |
+| 2155-2293 | **Pixiv Job engine (single-slot)**: `pixiv_job` state dict(2155) → `run_pixiv_job`(2181) state machine `fetching→scanning→matching→done/stopped/error` → `_start_pixiv_job`(2277) atomic start. Key timing: **check `stop` before every expensive phase** | New background-task engines |
+| 2295-2697 | **HTTP layer** `SyncHandler(BaseHTTPRequestHandler)`: `_send_json`(2302)/`_send_html`(2311)/`_send_error`(2319)/`_check_origin`(2302)/`do_OPTIONS`(2352)/`do_GET`(2360)/`do_POST`(2389) + `_handle_*` handlers | New API handlers |
 | 2668+ | `ThreadedServer`: threaded HTTP server + `__main__` startup (auto-opens browser) | Startup logic |
 
 ## 2. Key conventions
 
-- New API endpoint: add elif branch in `do_GET`(2335) or `do_POST`(2364) → write `_handle_*` method → update `docs/api.md`.
+- New API endpoint: add elif branch in `do_GET`(2360) or `do_POST`(2389) → write `_handle_*` method → update `docs/api.md`.
 - New setting: register in `_CONFIG_KEYS`(78) (if range/type needed) → `load_config`/`save_config` auto-cover (numeric keys) → sync frontend form → update `docs/settings.md`.
-- JSON request bodies: read `Content-Length` → `self.rfile.read` → `json.loads`, see `_handle_pixiv_bookmarks`(2469).
+- JSON request bodies: read `Content-Length` → `self.rfile.read` → `json.loads`, see `_handle_pixiv_bookmarks`(2494).
 - All API JSON responses use `ensure_ascii=False`; Chinese output directly.
 
 ## 3. Style
@@ -108,7 +108,7 @@
 - English identifiers, Chinese comments/logs/UI text.
 - Single-responsibility functions; split functions above ~80 lines (see `run_pixiv_job`'s state-machine sections).
 - Exceptions: always `console_log('ERROR', ...)`; sanitize text sent to the frontend via `_safe_error_text`.
-- Handlers use `_send_json`/`_send_html`/`_send_error` (2277/2286/2294) — never hand-roll `send_response`.
+- Handlers use `_send_json`/`_send_html`/`_send_error` (2302/2311/2319) — never hand-roll `send_response`.
 
 ## 4. Frontend/backend boundary
 
@@ -118,7 +118,7 @@
 
 ## 5. Background tasks (single-slot engine)
 
-**Copy, don't rewrite**, the Pixiv Job engine pattern (`server.py:2131-2269`): state dict + `stop` event + `lock` (2131); check `stop` before every expensive phase (order matters, see `run_pixiv_job` comments); atomic check-and-set start (2253) rejecting concurrent runs; split status vs result endpoints.
+**Copy, don't rewrite**, the Pixiv Job engine pattern (`server.py:2155-2293`): state dict + `stop` event + `lock` (2155); check `stop` before every expensive phase (order matters, see `run_pixiv_job` comments); atomic check-and-set start (2277) rejecting concurrent runs; split status vs result endpoints.
 
 ## 6. Verification discipline
 

@@ -27,7 +27,7 @@
 | `/api/config` | GET | — | 读取配置（PHPSESSID 不回显） | `_handle_config` |
 | `/api/config/save` | POST | 全部配置字段 | 保存配置到 `config.ini` | `_handle_config_save`(2498) |
 | `/api/pixiv/bookmarks` | POST | `uid`, `phpsessid`, `path`, `limit?` | 启动 Pixiv 收藏查重（后台 Job） | `_handle_pixiv_bookmarks`(2168) |
-| `/api/pixiv/bookmarks/stop` | POST | — | 请求终止当前 Job | `_handle_pixiv_stop`(2205) |
+| `/api/pixiv/bookmarks/stop` | POST | — | 请求终止当前 Job（仅限本机调用，远程返回 error） | `_handle_pixiv_stop`(2205) |
 | `/api/pixiv/job` | GET | — | 轮询 Job 状态（不含 result） | `_handle_pixiv_job`(2210) |
 | `/api/pixiv/job/result` | GET | — | 取终态结果（done 后含 matched） | `_handle_pixiv_job_result`(2219) |
 | `/api/blacklist` | GET | — | 读取黑名单 ID 列表 | `_handle_blacklist`(2225) |
@@ -97,7 +97,7 @@ Job 状态机：`idle | fetching | scanning | matching | done | stopped | error`
 
 - `GET /api/logs?since=<id>` → 增量日志，`truncated` 标志表示需重载
 - `POST /api/logs/clear` → 清内存缓冲
-- `POST /api/log`（body 或 query `cat`/`msg`）→ 前端日志转发，经 `console_log`(156)
+- `POST /api/log`（body 或 query `cat`/`msg`）→ 前端日志转发，经 `console_log`(156)；`msg` 截断至 512 字符、`cat` 至 32 字符后入库；`msg` 截断至 512 字符、`cat` 至 32 字符后入库
 
 ## 安全
 
@@ -137,7 +137,7 @@ Contract for every `/api/*` endpoint. All `/api/*` requests must pass the same-o
 | `/api/config` | GET | — | Read config (PHPSESSID never echoed) | `_handle_config` |
 | `/api/config/save` | POST | all fields | Save config to `config.ini` | `_handle_config_save`(2498) |
 | `/api/pixiv/bookmarks` | POST | `uid`, `phpsessid`, `path`, `limit?` | Start Pixiv dedup job (background) | `_handle_pixiv_bookmarks`(2168) |
-| `/api/pixiv/bookmarks/stop` | POST | — | Request job stop | `_handle_pixiv_stop`(2205) |
+| `/api/pixiv/bookmarks/stop` | POST | — | Request job stop (loopback clients only; remote gets error) | `_handle_pixiv_stop`(2205) |
 | `/api/pixiv/job` | GET | — | Poll job status (no result; error field sanitized+truncated) | `_handle_pixiv_job`(2210) |
 | `/api/pixiv/job/result` | GET | — | Final result (matched on done) | `_handle_pixiv_job_result`(2219) |
 | `/api/blacklist` | GET | — | Read blacklist IDs | `_handle_blacklist`(2225) |

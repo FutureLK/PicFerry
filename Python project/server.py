@@ -258,8 +258,9 @@ def console_log(category, message):
     # 写内存环形缓冲（供网页日志面板增量轮询）; 存原始分类与消息, 不含 ANSI
     try:
         global LOG_LAST_ID
-        log_id = next(LOG_SEQ)
         with LOG_LOCK:
+            # 取号必须在锁内: 与入队/LAST_ID 原子化, 否则并发乱序插入会让网页轮询按 id 过滤时静默跳行
+            log_id = next(LOG_SEQ)
             LOG_LAST_ID = log_id
             LOG_BUFFER.append((log_id, ts, category, message))
     except Exception: pass
@@ -1110,7 +1111,11 @@ function bindPreviewHover() {
         if (lastPreviewUrl === url) { show(); return; }
         lastPreviewUrl = url;
         previewImg.onload = show;
-        previewImg.onerror = function() { /* 加载失败不显示, 防破图空框 */ };
+        previewImg.onerror = function() {
+          // 加载失败不显示(防破图空框); 回滚缓存地址, 否则再次悬停会命中
+          // "同图免 onload 直显"捷径, 弹出失败残留的破图面板
+          lastPreviewUrl = '';
+        };
         previewImg.src = url;
       }, delay);
     });
@@ -1506,10 +1511,14 @@ function fillSettingsControls() {
   const cfg = globalConfig || {};
   // 历史滑条遗留的档位外数值: 动态补"自定义"选项保证回显（loadConfig 启动时只调用一次）
   if (cfg.thumbnailSize != null && !THUMB_PRESETS.includes(parseInt(cfg.thumbnailSize))) {
-    const opt = document.createElement('option');
-    opt.value = cfg.thumbnailSize;
-    opt.textContent = '自定义（' + cfg.thumbnailSize + 'px）';
-    settingThumbSize.appendChild(opt);
+    // 已存在同名 value 则跳过, 防二次调用时重复追加
+    const customVal = String(cfg.thumbnailSize);
+    if (![...settingThumbSize.options].some(o => o.value === customVal)) {
+      const opt = document.createElement('option');
+      opt.value = customVal;
+      opt.textContent = '自定义（' + cfg.thumbnailSize + 'px）';
+      settingThumbSize.appendChild(opt);
+    }
   }
   settingThumbSize.value = cfg.thumbnailSize != null ? cfg.thumbnailSize : 48;
   settingPreviewDelay.value = cfg.previewDelay != null ? cfg.previewDelay : 500;
@@ -1565,7 +1574,7 @@ async function loadBlacklistUI() {
     blacklistList.innerHTML = ids.map(id =>
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-bottom:1px solid var(--bg-inset);font-family:monospace;font-size:13px">' +
       '<span>' + escapeHtml(id) + '</span>' +
-      '<button class="btn btn-danger" style="padding:4px 12px;font-size:12px" data-remove="' + escapeHtml(id) + '">删除</button>' +
+      '<button class="btn btn-danger" style="padding:4px 12px;font-size:12px" data-remove="' + escapeHtml(id).replace(/"/g, '&quot;') + '">删除</button>' +
       '</div>'
     ).join('');
     blacklistList.querySelectorAll('[data-remove]').forEach(btn => {
@@ -1605,7 +1614,22 @@ document.getElementById('blacklistAddBtn').addEventListener('click', async funct
   } catch (e) { /* 忽略 */ }
 });
 
+// 清空黑名单双击确认(破坏性操作): 首点进入待确认态, 3 秒内再点才执行, 超时自动复位
+let clearArmTimer = null;
 document.getElementById('blacklistClearBtn').addEventListener('click', async function() {
+  if (!this.dataset.armed) {
+    this.dataset.armed = '1';
+    this.textContent = '再点一次确认';
+    clearTimeout(clearArmTimer);
+    clearArmTimer = setTimeout(() => {
+      delete this.dataset.armed;
+      this.textContent = '清空';
+    }, 3000);
+    return;
+  }
+  clearTimeout(clearArmTimer);
+  delete this.dataset.armed;
+  this.textContent = '清空';
   try {
     await fetch('/api/blacklist/clear', { method: 'POST' });
   } catch (e) { /* 忽略 */ }
@@ -2270,6 +2294,7 @@ def _start_pixiv_job(uid, phpsessid, path, limit=0):
 
 class SyncHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
+    timeout = 60   # 连接读超时(秒): 空闲/慢连接不再无限占用工作线程
 
     def log_message(self, format, *args):
         pass  # suppress default logging
@@ -2504,7 +2529,12 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
         self._send_json({'ok': True, 'status': 'fetching'})
 
     def _handle_pixiv_stop(self):
-        """POST /api/pixiv/bookmarks/stop: 置 stop 事件, Job 在下个检查点停止"""
+        """POST /api/pixiv/bookmarks/stop: 置 stop 事件, Job 在下个检查点停止;
+        仅限本机调用——防局域网内任意设备终止他方启动的扫描任务"""
+        if not self._is_loopback_client():
+            console_log('INFO', '远程来源请求终止 Pixiv 任务, 已拒绝')
+            self._send_json({'error': '终止操作仅限本机'})
+            return
         pixiv_job['stop'].set()
         self._send_json({'ok': True})
 
@@ -2613,7 +2643,8 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
         msg = params.get('msg', [None])[0]
         cat = params.get('cat', ['INFO'])[0]
         if msg:
-            console_log(cat, msg)
+            # 截断优于拒绝: 防超长外文挤占 500 条环形缓冲(截断后前端无感)
+            console_log(cat[:32], msg[:512])
         self._send_json({'ok': True})
 
     def _handle_logs(self, params):
