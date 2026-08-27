@@ -65,7 +65,7 @@
 ### POST `/api/config/save`
 
 **请求体**：JSON，字段见 `docs/settings.md`。空值语义：PHPSESSID 留空保留原值；其余留空回落默认。
-**响应**：`{"ok": true}`（参考 `_handle_config_save`，`server.py:2498`）
+**响应**：`{"ok": true}`；失败为 `{"error": "..."}`——写入采用原子替换（.tmp + os.replace），若 `config.ini` 已损坏则拒绝覆盖保存（防 PHPSESSID 被空默认值抹除）或写盘失败（参考 `_handle_config_save`，`server.py:2498`）
 
 ### POST `/api/pixiv/bookmarks`
 

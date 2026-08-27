@@ -1,6 +1,6 @@
 # docs/settings.md — 配置参考
 
-`config.ini` 全部字段的说明。配置文件位于程序旁 `config/` 子目录（旧版根目录散落文件首次启动自动迁入），启动时自动加载，修改输入框失焦后自动保存。
+`config.ini` 全部字段的说明。配置文件位于程序旁 `config/` 子目录（旧版根目录散落文件首次启动自动迁入；程序所在位置只读时自动降级到 `%APPDATA%\ImageSync\config`），启动时自动加载，修改输入框失焦后自动保存。
 
 > 目标读者：人类。AI 新增配置键时请走 `docs/guides/adding-a-setting.md` 的流程，并同步更新本文档。
 
@@ -67,10 +67,12 @@ lightTheme = 0
 
 ## 实现位置
 
-- 注册表：`server.py:45 _CONFIG_KEYS`（`key: (default, lo, hi, type)`）
-- 解析/钳制：`server.py:55 _parse_config_value`
-- 读取：`server.py:69 load_config`（损坏/缺段/BOM 时回落全默认，不抛错）
-- 保存：`server.py:92 save_config`（合并当前值，`bool` 转 `0/1`）
+- 目录确定：`server.py:40 _prepare_config_dir`（程序旁不可写时降级 `%APPDATA%\ImageSync\config`）
+- 注册表：`server.py:78 _CONFIG_KEYS`（`key: (default, lo, hi, type)`）
+- 解析/钳制：`server.py:88 _parse_config_value`（含溢出值兜底）
+- 解析文件：`server.py:108 _parse_config_file`（语法损坏/BOM/坏编码显式区分于文件缺失）
+- 读取：`server.py:139 load_config`（解析失败回落全默认，不抛错）
+- 保存：`server.py:148 save_config`（合并当前值、`bool` 转 `0/1`；`.tmp + os.replace` 原子写；文件已损坏时**拒绝覆盖保存**，防 PHPSESSID 被空默认值抹除）
 - HTTP 读取：`GET /api/config`（`_handle_config`）
 - HTTP 保存：`POST /api/config/save`（`_handle_config_save`）
 
@@ -80,7 +82,7 @@ lightTheme = 0
 
 # English
 
-Reference for every `config.ini` field. The file lives in the `config/` subfolder next to `server.py` (or the EXE); it is loaded at startup and saved automatically when a form input loses focus.
+Reference for every `config.ini` field. The file lives in the `config/` subfolder next to `server.py` (or the EXE) — falling back to `%APPDATA%\ImageSync\config` when that location is read-only; it is loaded at startup and saved automatically when a form input loses focus.
 
 ## Field Summary
 
@@ -108,8 +110,10 @@ Reference for every `config.ini` field. The file lives in the `config/` subfolde
 
 ## Implementation
 
-- Registry: `server.py:45 _CONFIG_KEYS`
-- Parse/clamp: `server.py:55 _parse_config_value`
-- Load: `server.py:69 load_config` (falls back to defaults on corrupt config, never raises)
-- Save: `server.py:92 save_config`
+- Directory resolution: `server.py:40 _prepare_config_dir` (falls back to `%APPDATA%\ImageSync\config`)
+- Registry: `server.py:78 _CONFIG_KEYS`
+- Parse/clamp: `server.py:88 _parse_config_value` (overflow values included)
+- File parsing: `server.py:108 _parse_config_file` (corrupt/BOM/bad-encoding distinguished from missing)
+- Load: `server.py:139 load_config` (falls back to defaults on any parse failure, never raises)
+- Save: `server.py:148 save_config` (atomic `.tmp + os.replace`; **refuses to overwrite** a corrupt file so the stored PHPSESSID can't be wiped by empty defaults)
 - HTTP: `GET /api/config` / `POST /api/config/save`

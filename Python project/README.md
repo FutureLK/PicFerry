@@ -11,7 +11,7 @@
 从 [Releases 页面](https://github.com/FutureLK/Pixiv-IMG-local-duplication/releases) 下载最新版的 `图片同步.exe`，双击运行，浏览器自动打开。
 
 > 首次运行 Windows 可能提示安全警告，点击「更多信息」→「仍要运行」即可。
-> 配置文件 `config.ini` 与黑名单 `blacklist.csv` 存放在 EXE 旁的 `config/` 文件夹内（旧版本散落在同目录的文件会在首次启动时自动迁入）。
+> 配置文件 `config.ini` 与黑名单 `blacklist.csv` 存放在 EXE 旁的 `config/` 文件夹内（旧版本散落在同目录的文件会在首次启动时自动迁入）；程序所在位置只读无法创建该文件夹时，自动改存到用户数据目录 `%APPDATA%\ImageSync\config` 并在控制台提示。
 
 ### 方式二：源码运行
 
