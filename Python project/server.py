@@ -187,6 +187,28 @@ def save_config(data: dict):
             pass
         return False
 
+# ─── 声明权控制 ──────────────────────────────────────────────────────────────
+# 本地基座声明(dev1ceA/dev1ceB/PixivL 中的本地盘形态)与 PHPSESSID 属本机专属配置,
+# 远程来源提交时剥除——防借改写声明基座升级为全盘读写, 防远程清空声明或凭证。
+# 远程设备对设备键的合法用途是网络地址(http://、ftp://), 不受影响。
+
+def strip_remote_locked_keys(data: dict):
+    """就地剥除 data 中不允许远程写入的键, 返回被剥除的键名列表。
+    - dev1ceA/dev1ceB/PixivL: 本地盘形态值与空串(=清除声明)不受理;
+    - PHPSESSID: 无论何值均不受理(凭证仅限本机写入/清空)。"""
+    removed = []
+    for k in ('dev1ceA', 'dev1ceB', 'PixivL'):
+        if k not in data:
+            continue
+        v = data[k]
+        if not isinstance(v, str) or not v.strip() or is_local_path(v):
+            del data[k]
+            removed.append(k)
+    if 'PHPSESSID' in data:
+        del data['PHPSESSID']
+        removed.append('PHPSESSID')
+    return removed
+
 # ─── Console logging ─────────────────────────────────────────────────────────
 
 LOG_COLORS = {
@@ -873,6 +895,10 @@ async function doScan() {
   const u1 = urlA.value.trim();
   const u2 = urlB.value.trim();
   if (!u1 || !u2) { setStatus('请填写两台设备的链接或路径', 'error'); return; }
+
+  // 失焦自动保存可能尚未落盘: 先等保存完成——新输入的本地盘路径必须先成为
+  // 「已声明基座」才可通过服务端扫描校验(网络地址不受影响)
+  await saveConfig();
 
   scanBtn.disabled = true;
   emptyState.classList.add('hidden');
@@ -1838,6 +1864,13 @@ def _check_realpath_within(base, full):
     if rf != rb and not rf.startswith(rb + os.sep):
         raise ValueError('路径越出声明基座')
 
+def _assert_declared_scan_base(url):
+    """目录扫描的本地基座校验: 列目录同属读取行为, 与 _read_remote_file 读链路
+    同受三层防线约束 —— 本地路径必须位于 config 已声明的基座之内; 网络形态放行。
+    未声明时抛 ValueError('未声明的本地路径') 由调用方统一处理。"""
+    if is_local_path(url):
+        _check_local_base(strip_file_prefix(url))
+
 # ─── HTTP Request Handler ────────────────────────────────────────────────────
 
 def _read_remote_file(url, filename):
@@ -2099,8 +2132,10 @@ pixiv_job = {
 
 
 def _scan_local_files(path):
-    """扫描本地目录/FTP/HTTP 源, 返回 [{name, size}]（保持原 _handle_pixiv_bookmarks 的扫描方式）"""
+    """扫描本地目录/FTP/HTTP 源, 返回 [{name, size}]（保持原 _handle_pixiv_bookmarks 的扫描方式）
+    本地路径未在 config 中声明时抛 ValueError → 上层记为 Job error 态"""
     if is_local_path(path):
+        _assert_declared_scan_base(path)
         return local_list(path)
     if is_ftp(path):
         entries = ftp_list(path)
@@ -2274,6 +2309,11 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
                 return False
         return True
 
+    def _is_loopback_client(self):
+        """客户端是否来自回环地址(决定敏感键的声明权)"""
+        ip = self.client_address[0]
+        return ip in ('127.0.0.1', '::1') or (isinstance(ip, str) and ip.startswith('::ffff:127.'))
+
     def do_OPTIONS(self):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path.startswith('/api/') and not self._check_origin():
@@ -2350,6 +2390,7 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
 
         try:
             if is_local_path(phone_url):
+                _assert_declared_scan_base(phone_url)   # 未声明 → ValueError → 统一错误响应
                 files = local_list(phone_url)
                 console_log('SCAN', f'本地扫描: {len(files)} 个文件 ({phone_url})')
             elif is_ftp(phone_url):
@@ -2599,6 +2640,10 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             content_length = int(self.headers.get('Content-Length', 0))
             body = self.rfile.read(content_length)
             data = json.loads(body)
+            if not self._is_loopback_client():
+                dropped = strip_remote_locked_keys(data)
+                if dropped:
+                    console_log('INFO', f'远程提交已忽略本机专属键: {",".join(dropped)}')
             if not save_config(data):
                 # 文件损坏拒绝覆盖(防凭证被默认值抹除) / 写盘失败
                 self._send_json({'error': '配置未保存：config.ini 损坏或写入失败，见服务端日志'})

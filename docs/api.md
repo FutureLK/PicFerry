@@ -46,6 +46,7 @@
 
 **响应**：`{"files": [{"name": "...", "size": N}, ...], "total": N}`
 **错误**：`{"error": "...", "files": []}`
+**声明门**：`url` 为本地路径形态时仅接受已声明基座——未声明返回 `{"error": "未声明的本地路径", "files": []}`；`http://`、`ftp://` 网络地址不受此限。
 
 ### POST `/api/hash`
 
@@ -65,13 +66,14 @@
 ### POST `/api/config/save`
 
 **请求体**：JSON，字段见 `docs/settings.md`。空值语义：PHPSESSID 留空保留原值；其余留空回落默认。
+**声明权**：非本机（非回环）来源提交时剥除本机专属键——`dev1ceA/dev1ceB/PixivL` 的本地盘形态值与空串、`PHPSESSID` 全值；网络地址形态不受限。剥除动作记 INFO 日志，其余键照常保存。
 **响应**：`{"ok": true}`；失败为 `{"error": "..."}`——写入采用原子替换（.tmp + os.replace），若 `config.ini` 已损坏则拒绝覆盖保存（防 PHPSESSID 被空默认值抹除）或写盘失败（参考 `_handle_config_save`，`server.py:2498`）
 
 ### POST `/api/pixiv/bookmarks`
 
 > 上游接口来源：Pixiv Web AJAX 接口（非官方文档 `github.com/daydreamer-json/pixiv-ajax-api-docs`「Get user bookmarks」），字段语义（pageCount）经 `pixiv-api.readthedocs.io` 核实；代码见 `server.py:1653 PIXIV_BOOKMARK_URL`。
 
-**请求体**：JSON `{"uid": "...", "phpsessid": "...", "path": "...", "limit": N?}`（limit 缺省用配置 `pixivLimit`；`allowLan=0` 时 phpsessid 缺省回落到配置存储值）
+**请求体**：JSON `{"uid": "...", "phpsessid": "...", "path": "...", "limit": N?}`（limit 缺省用配置 `pixivLimit`；`allowLan=0` 时 phpsessid 缺省回落到配置存储值；`path` 为本地路径形态时同样须为已声明基座，否则 Job 落入 error 态"未声明的本地路径"）
 **逻辑**：校验 → `_start_pixiv_job`(1958) 原子启动单槽任务 → 立即返回
 **响应**：`{"ok": true, "status": "fetching"}` 或 `{"error": "..."}`（如"已有任务在运行"）
 
@@ -101,6 +103,8 @@ Job 状态机：`idle | fetching | scanning | matching | done | stopped | error`
 
 - **同源闸门**：`_check_origin`（`server.py:2158`）校验 Origin/Referer 与 Host 一致；`allowLan=0` 时额外校验 Host ∈ `{127.0.0.1, localhost, ::1}`（防 DNS rebinding）。所有 `/api/*`（含 OPTIONS 预检）必须经过，新端点不得绕过。
 - **路径净化**：`/api/copy` 写本地时经 `_sanitize_rel_path` + `_check_local_base` + `_check_realpath_within` 防目录穿越；未声明的本地基址读写被拒（`_declared_local_bases`，`server.py:1564`）。
+- **扫描声明门**：目录列表（`/api/list`）与 Pixiv 本地扫描同受基座校验（`_assert_declared_scan_base`），未声明的本地目录不可枚举，与读链路同口径。
+- **声明权边界**：本地盘形态的设备键、其空串清除意图及 `PHPSESSID` 仅回环来源可经 `/api/config/save` 写入（`strip_remote_locked_keys`），远程设备保留网络地址形态的正常设置能力。
 - **PHPSESSID**：任何端点不回显明文。
 
 ---
@@ -145,4 +149,6 @@ Contract for every `/api/*` endpoint. All `/api/*` requests must pass the same-o
 
 - **Same-origin gate**: `_check_origin` (`server.py:2158`) — Origin/Referer must match Host; with `allowLan=0` Host must be in `{127.0.0.1, localhost, ::1}` (DNS-rebinding guard). Every `/api/*` request (including OPTIONS) must pass it; new endpoints must not bypass it.
 - **Path sanitization**: local writes in `/api/copy` go through `_sanitize_rel_path` + `_check_local_base` + `_check_realpath_within` (directory-traversal guard); undeclared local bases are rejected (`_declared_local_bases`, `server.py:1564`).
+- **Declared-base scan gate**: directory listing (`/api/list`) and Pixiv local scans go through the same base check (`_assert_declared_scan_base`); undeclared local directories cannot be enumerated — same policy as the read path.
+- **Declaration authority**: local-form device keys, their empty-string clears, and `PHPSESSID` are only writable via `/api/config/save` from loopback clients (`strip_remote_locked_keys`); remote devices keep normal network-address configuration.
 - **PHPSESSID**: never echoed by any endpoint.

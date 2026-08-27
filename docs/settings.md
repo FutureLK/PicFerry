@@ -45,6 +45,7 @@
   - `0`（默认）：仅本机可访问，且 `_check_origin` 校验 Host ∈ `{127.0.0.1, localhost, ::1}`（防 DNS rebinding）。
   - `1`：绑定 `0.0.0.0`，局域网内任何设备均可访问。
   - **开启后局域网内任何设备均可无鉴权访问本服务并读写文件。**
+  - 权限边界：远程设备可设置网络地址形态的设备键（`http://`、`ftp://`）并扫描网络源；设备键的本地盘形态值、空串清除意图及 `PHPSESSID` 仅本机可写；未声明的本地目录不可列出或读取。
 - **lightTheme** — 界面主题开关。`0`（默认）深色；`1` 浅色（日间模式）。入口在「更多设置 → 界面设置」下拉，切换即存。主题通过 CSS 变量覆盖层（`html[data-theme=light]`）+ `color-scheme` 实现。
 
 ## 示例文件
@@ -105,6 +106,7 @@ Reference for every `config.ini` field. The file lives in the `config/` subfolde
 
 - **PHPSESSID is sensitive**: never echoed by `/api/config` (only `hasPhpsessid`); never printed in logs. Leaving it empty keeps the stored value; clearing requires editing `config.ini` manually.
 - **allowLan** defaults to `0` (localhost-only, Host checked against `{127.0.0.1, localhost, ::1}` to prevent DNS rebinding). Setting `1` binds `0.0.0.0` — **any LAN device can then access the service and read/write files without authentication.**
+- **Permission boundary**: remote devices may set network-address device keys (`http://`, `ftp://`) and scan network sources; local-drive-form values of the device keys, their empty-string clears, and `PHPSESSID` are writable from this machine only; undeclared local directories cannot be listed or read.
 - **thumbnailSize** — UI is a dropdown with presets 16/24/48/64/96; legacy slider values outside the presets show up as a temporary "custom" option.
 - **lightTheme** — UI theme switch (dark default / light day mode), set from the "更多设置 → 界面设置" dropdown; implemented via a CSS variable override layer (`html[data-theme=light]`) plus `color-scheme`.
 
