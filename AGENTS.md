@@ -9,7 +9,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 
 局域网图片比对与传输工具（"PicFerry"，界面中文）。通过 HTTP / FTP / 本地磁盘路径连接两台设备，扫描图片列表、按文件名去重、一键同步；内置 Pixiv 收藏查重（分p级匹配 + 作品黑名单）。
 
-- 仓库：`Pixiv-IMG-local-duplication`
+- 仓库：`PicFerry`
 - 用户文档（人类视角）：`README.md`、`Python project/README.md`
 
 ## 2. 项目结构

@@ -20,7 +20,9 @@
 
 ## 快速开始
 
-暂时不打算上传构建好的exe程序，建议优先源码运行
+**方式一（推荐）**：从 [Releases](https://github.com/FutureLK/PicFerry/releases) 下载 `PicFerry.exe` 双击运行
+
+**方式二**：源码运行（需 Python 3.10+）
 
 ```
 cd "Python project"
@@ -43,7 +45,7 @@ python server.py
 2. **`allowLan` 开启后**：绑定 `0.0.0.0`，局域网内任何设备均可无鉴权访问本服务并读写文件——请在可信的网络环境下开启。
 3. **Pixiv请求间隔**（默认0.8s）过低可能触发限流（403）；PHPSESSID过期同样表现为403，请先检查凭证是否过期。
 4. **FTP兼容性**：部分设备文件服务不支持 `mlsd` 命令，程序会自动降级为 `nlst`/`dir` 解析（可能会导致文件大小显示为0）。
-5. **exe构建**：短期内不上传构建好的exe程序到Releases页，建议优先源码运行。
+5. **exe构建**：各版本均在 [Releases](https://github.com/FutureLK/PicFerry/releases) 页提供 `PicFerry.exe`；本地重建方法见 `Python project/README.md` 的打包章节。
 
 ## 相关文档
 
