@@ -5,7 +5,7 @@
 - static/style.css   原 <style> 块内容（逐字节原样）
 - static/app.js      原 <script> 块内容（逐字节原样）
 
-server.py 通过 `from webassets import HTML` 在导入期得到装配好的完整页面。
+handler.py 通过 `from webassets import HTML` 在导入期得到装配好的完整页面。
 """
 import os
 import sys

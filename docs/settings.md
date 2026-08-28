@@ -81,7 +81,7 @@ debugMode = 0
 - 解析文件：`config_store.py _parse_config_file`（语法损坏/BOM/坏编码显式区分于文件缺失）
 - 读取：`config_store.py load_config`（解析失败回落全默认，不抛错）
 - 保存：`config_store.py save_config`（合并当前值、`bool` 转 `0/1`；`.tmp + os.replace` 原子写；文件已损坏时**拒绝覆盖保存**，防 PHPSESSID 被空默认值抹除）
-- 导入耗时注册表：`logging_util.py IMPORT_TIMING`（server.py 导入区 `perf_counter` 写入；`handler.py _emit_import_timing` 在 debugMode 关→开时补发）
+- 导入耗时注册表：`logging_util.py IMPORT_TIMING`（server.py / handler.py 导入区 `perf_counter` 写入；`handler.py _emit_import_timing` 在 debugMode 关→开时补发）
 - HTTP 读取：`GET /api/config`（`_handle_config`，handler.py）
 - HTTP 保存：`POST /api/config/save`（`_handle_config_save`，handler.py）
 
@@ -128,5 +128,5 @@ Reference for every `config.ini` field. The file lives in the `config/` subfolde
 - File parsing: `config_store.py _parse_config_file` (corrupt/BOM/bad-encoding distinguished from missing)
 - Load: `config_store.py load_config` (falls back to defaults on any parse failure, never raises)
 - Save: `config_store.py save_config` (atomic `.tmp + os.replace`; **refuses to overwrite** a corrupt file so the stored PHPSESSID can't be wiped by empty defaults)
-- Import-timing registry: `logging_util.py IMPORT_TIMING` (written by server.py's import block via `perf_counter`; `handler.py _emit_import_timing` re-emits when debugMode goes off→on)
+- Import-timing registry: `logging_util.py IMPORT_TIMING` (written by server.py / handler.py import blocks via `perf_counter`; `handler.py _emit_import_timing` re-emits when debugMode goes off→on)
 - HTTP: `GET /api/config` / `POST /api/config/save` (`handler.py`)

@@ -15,9 +15,10 @@
 
 ### 方式二：源码运行
 
-需要 Python 3.10+，无需安装任何额外依赖。
+需要 Python 3.10+，无需安装任何额外依赖。运行入口为仓库内 `PicFerry/server.py`，在 `PicFerry/` 目录下执行：
 
 ```bash
+cd PicFerry
 python server.py
 ```
 
@@ -153,7 +154,8 @@ pyinstaller --onefile --name "PicFerry" --add-data "static;static" server.py
 ## 项目结构
 
 ```
-├── server.py          Python 服务器（HTTP 服务与业务逻辑）
+├── server.py          服务端装配与启动（python server.py 运行入口）
+├── handler.py         HTTP 路由层（SyncHandler 全部 /api/* 处理 + 声明权剥除）
 ├── webassets.py       前端装配：读取 static/ 拼回完整页面
 ├── static/            前端三件套（index.html / style.css / app.js）
 ├── logging_util.py    日志工具（彩色终端输出 + 内存环形缓冲）
@@ -161,6 +163,7 @@ pyinstaller --onefile --name "PicFerry" --add-data "static;static" server.py
 ├── pathsafety.py      本地路径安全（防目录穿越）
 ├── datasources.py     HTTP/FTP/本地 数据源读取
 ├── pixiv.py           Pixiv 收藏查重（后台 Job + 黑名单）
+├── verify.py          冒烟验证脚本（python verify.py）
 ├── dist/
 │   └── PicFerry.exe     打包后的独立可执行文件 (~7 MB)
 ├── config/            运行时文件目录（自动创建）

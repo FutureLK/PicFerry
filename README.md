@@ -39,6 +39,21 @@ python server.py
 - **黑名单**：在「更多设置」添加作品ID（支持裸ID或 `https://www.pixiv.net/artworks/123456` 链接）。
 - **配置**：所有设置项自动持久化到程序旁 `config/config.ini`，字段说明见 [PicFerry/README.md](PicFerry/README.md)。
 
+## 项目结构
+
+| 路径 | 职责 |
+|---|---|
+| `PicFerry/server.py` | 服务端装配与启动（运行入口：`python server.py`） |
+| `PicFerry/handler.py` | HTTP 路由层（`SyncHandler` 全部 `/api/*` 处理 + 声明权剥除） |
+| `PicFerry/webassets.py` + `static/` | 前端装配：static/ 三件套（index.html / style.css / app.js）在导入期拼回完整页面 |
+| `PicFerry/logging_util.py` | 日志（终端彩色输出 + 网页轮询内存环形缓冲） |
+| `PicFerry/config_store.py` | 配置读写（`config.ini`，注册表驱动） |
+| `PicFerry/pathsafety.py` | 本地路径安全（防目录穿越三层防线） |
+| `PicFerry/datasources.py` | HTTP / FTP / 本地 数据源读取 |
+| `PicFerry/pixiv.py` | Pixiv 收藏查重（后台 Job + 黑名单） |
+| `PicFerry/verify.py` | 冒烟验证脚本（`python verify.py`） |
+| `PicFerry/config/` | 运行时文件目录（config.ini / blacklist.csv，自动创建，不入库） |
+
 ## 注意事项
 
 1. **PHPSESSID是属于你自己的Pixiv登录凭证**：本地程序只在本地用于访问Pixiv api接口，不会上传到任何第三方服务器；`/api/config` 不回显明文。

@@ -1,0 +1,2 @@
+# 前端三件套强制 LF: 防新机器 checkout 出 CRLF 使 webassets 装配页面字节漂移
+PicFerry/static/** eol=lf
