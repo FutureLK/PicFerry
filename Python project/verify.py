@@ -246,6 +246,7 @@ def main():
         shutil.copy2(BASE / 'config_store.py', tmp / 'config_store.py')
         shutil.copy2(BASE / 'pathsafety.py', tmp / 'pathsafety.py')
         shutil.copy2(BASE / 'datasources.py', tmp / 'datasources.py')
+        shutil.copy2(BASE / 'pixiv.py', tmp / 'pixiv.py')
 
         log_path = tmp / 'server_output.log'
         with open(log_path, 'wb') as log_file:
