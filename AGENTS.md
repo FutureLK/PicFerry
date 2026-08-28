@@ -10,7 +10,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 局域网图片比对与传输工具（"PicFerry"，界面中文）。通过 HTTP / FTP / 本地磁盘路径连接两台设备，扫描图片列表、按文件名去重、一键同步；内置 Pixiv 收藏查重（分p级匹配 + 作品黑名单）。
 
 - 仓库：`PicFerry`
-- 用户文档（人类视角）：`README.md`、`Python project/README.md`
+- 用户文档（人类视角）：`README.md`、`PicFerry/README.md`
 
 ## 2. 项目结构
 
@@ -19,7 +19,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 ├── AGENTS.md                 ← 本文档（AI 宪法）
 ├── README.md                 ← 根说明（人类）
 ├── docs/                     ← 文档库（AI + 人类），规则见 docs/README.md
-├── Python project/           ← 唯一代码目录
+├── PicFerry/                 ← 唯一代码目录
 │   ├── server.py             ← 服务端主文件（HTTP 服务 + 业务逻辑，见 §4 结构地图）
 │   ├── webassets.py          ← 前端装配：读 static/ 三件套拼回完整 HTML
 │   ├── static/               ← 前端真实文件（index.html / style.css / app.js）
@@ -74,7 +74,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 - `docs/guides/collaboration-protocol.md` — 执行期协作协议
 - `docs/guides/` — 操作指南（新增设置/新增 API）
 - `archived/archived.md` — 归档目录规范与溯源指引（用户授权查阅归档时按此操作）
-- `Python project/README.md` — 用户视角功能说明
+- `PicFerry/README.md` — 用户视角功能说明
 - Pixiv Web AJAX 接口文档（非官方）：`github.com/daydreamer-json/pixiv-ajax-api-docs`（端点 `PIXIV_BOOKMARK_URL` 来源，见 `docs/api.md` §Pixiv）
 
 ## 7. 行为准则（Code of Conduct for AI）

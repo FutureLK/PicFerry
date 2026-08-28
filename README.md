@@ -25,7 +25,7 @@
 **方式二**：源码运行（需 Python 3.10+）
 
 ```
-cd "Python project"
+cd PicFerry
 python server.py
 ```
 
@@ -37,7 +37,7 @@ python server.py
 - **设备同步**：输入设备A/B的HTTP/FTP/本地路径链接，点击「扫描比对」→ 勾选文件 → 「同步到设备A」。
 - **Pixiv查重**：在「Pixiv查重」页填写对应的UID、PHPSESSID（浏览器Cookie）与本地文件夹路径，点击「拉取收藏」；查重结果按作品聚合，格式 `123_p0~p9 | 123 | 已有2张/共10张`。
 - **黑名单**：在「更多设置」添加作品ID（支持裸ID或 `https://www.pixiv.net/artworks/123456` 链接）。
-- **配置**：所有设置项自动持久化到程序旁 `config/config.ini`，字段说明见 [Python project/README.md](Python%20project/README.md)。
+- **配置**：所有设置项自动持久化到程序旁 `config/config.ini`，字段说明见 [PicFerry/README.md](PicFerry/README.md)。
 
 ## 注意事项
 
@@ -45,9 +45,9 @@ python server.py
 2. **`allowLan` 开启后**：绑定 `0.0.0.0`，局域网内任何设备均可无鉴权访问本服务并读写文件——请在可信的网络环境下开启。
 3. **Pixiv请求间隔**（默认0.8s）过低可能触发限流（403）；PHPSESSID过期同样表现为403，请先检查凭证是否过期。
 4. **FTP兼容性**：部分设备文件服务不支持 `mlsd` 命令，程序会自动降级为 `nlst`/`dir` 解析（可能会导致文件大小显示为0）。
-5. **exe构建**：各版本均在 [Releases](https://github.com/FutureLK/PicFerry/releases) 页提供 `PicFerry.exe`；本地重建方法见 `Python project/README.md` 的打包章节。
+5. **exe构建**：各版本均在 [Releases](https://github.com/FutureLK/PicFerry/releases) 页提供 `PicFerry.exe`；本地重建方法见 `PicFerry/README.md` 的打包章节。
 
 ## 相关文档
 
-- [Python project/README.md](Python%20project/README.md) — 完整功能/API/打包说明
+- [PicFerry/README.md](PicFerry/README.md) — 完整功能/API/打包说明
 - [docs/](docs/README.md) — 技术文档库（API契约 / 配置参考 / AI协作指南）
