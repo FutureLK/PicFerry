@@ -11,7 +11,7 @@
 |---|---|---|
 | [adding-a-setting.md](adding-a-setting.md) | AI | 新增一个可调配置键的完整流程（注册表→读写→前端→文档） |
 | [adding-an-api.md](adding-an-api.md) | AI | 新增一个 `/api/*` 端点的完整流程（路由→handler→文档） |
-| [module-conventions.md](module-conventions.md) | AI | 单文件 `server.py` 的模块组织约定与新增代码位置 |
+| [module-conventions.md](module-conventions.md) | AI | `PicFerry/` 多模块布局（server.py 入口 + 一方模块）的组织约定与新增代码位置 |
 | [collaboration-protocol.md](collaboration-protocol.md) | AI | 执行期协作协议：计划锁定 / 硬伤处理 / 无人值守 |
 
 ## 使用规则
@@ -35,7 +35,7 @@ How-to guides for AI agents. Each guide covers one full procedure with code loca
 |---|---|---|
 | [adding-a-setting.md](adding-a-setting.md) | AI | Full procedure for adding a configurable setting (registry → read/write → frontend → docs) |
 | [adding-an-api.md](adding-an-api.md) | AI | Full procedure for adding an `/api/*` endpoint (route → handler → docs) |
-| [module-conventions.md](module-conventions.md) | AI | Module organization conventions for single-file `server.py` and where new code goes |
+| [module-conventions.md](module-conventions.md) | AI | Module organization conventions for the multi-module `PicFerry/` layout (server.py entry + first-party modules) and where new code goes |
 
 ## Rules
 

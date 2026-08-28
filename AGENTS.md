@@ -10,7 +10,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 局域网图片比对与传输工具（"PicFerry"，界面中文）。通过 HTTP / FTP / 本地磁盘路径连接两台设备，扫描图片列表、按文件名去重、一键同步；内置 Pixiv 收藏查重（分p级匹配 + 作品黑名单）。
 
 - 仓库：`PicFerry`
-- 用户文档（人类视角）：`README.md`、`Python project/README.md`
+- 用户文档（人类视角）：`README.md`、`PicFerry/README.md`
 
 ## 2. 项目结构
 
@@ -19,8 +19,14 @@ This document is the project constitution for AI agents. Read and follow it befo
 ├── AGENTS.md                 ← 本文档（AI 宪法）
 ├── README.md                 ← 根说明（人类）
 ├── docs/                     ← 文档库（AI + 人类），规则见 docs/README.md
-├── Python project/           ← 唯一代码目录
-│   ├── server.py             ← 全部代码（单文件，见 §4 结构地图）
+├── PicFerry/                 ← 唯一代码目录
+│   ├── server.py             ← 服务端装配与启动（精简 import 区 + PORT + ThreadedServer + main，见 §4）
+│   ├── handler.py            ← HTTP 路由层（SyncHandler 全部 /api/* 处理 + 声明权剥除）
+│   ├── webassets.py          ← 前端装配：读 static/ 三件套拼回完整 HTML
+│   ├── static/               ← 前端真实文件（index.html / style.css / app.js）
+│   ├── logging_util.py config_store.py pathsafety.py datasources.py pixiv.py
+│   │                         ← 自 server.py 外移的一方模块（日志/配置/路径安全/数据源/Pixiv）
+│   ├── verify.py             ← 冒烟验证脚本（python verify.py）
 │   ├── README.md             ← 用户文档（功能/API/打包）
 │   ├── config/               ← 运行时文件目录（自动创建，不入库）
 │   │   ├── config.ini        ← 用户配置（旧版根目录散落文件首次启动自动迁入）
@@ -49,7 +55,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 
 ## 4. 注意事项（代码导航）
 
-`server.py` 是单文件应用（纯标准库，前端内嵌在 `HTML` 常量）。**代码内部结构地图（行区表）、新增代码位置与关键约定见 `docs/guides/module-conventions.md` §1-§2**；该文档随代码维护，AI 改动代码后必须同步（§3.9 文档义务）。
+`server.py` 是服务端装配与启动入口（纯标准库），HTTP 路由层在 `handler.py`（`SyncHandler`）；前端 HTML/CSS/JS 拆分在 `static/`（index.html/style.css/app.js），由 `webassets.py` 在导入期装配回完整 `HTML`，服务端零路由变化。日志/配置/路径安全/数据源/Pixiv 在同目录一方模块。**代码内部结构地图（行区表）、新增代码位置与关键约定见 `docs/guides/module-conventions.md` §1-§2**；该文档随代码维护，AI 改动代码后必须同步（§3.9 文档义务）。
 
 ## 5. 对话要求
 
@@ -70,7 +76,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 - `docs/guides/collaboration-protocol.md` — 执行期协作协议
 - `docs/guides/` — 操作指南（新增设置/新增 API）
 - `archived/archived.md` — 归档目录规范与溯源指引（用户授权查阅归档时按此操作）
-- `Python project/README.md` — 用户视角功能说明
+- `PicFerry/README.md` — 用户视角功能说明
 - Pixiv Web AJAX 接口文档（非官方）：`github.com/daydreamer-json/pixiv-ajax-api-docs`（端点 `PIXIV_BOOKMARK_URL` 来源，见 `docs/api.md` §Pixiv）
 
 ## 7. 行为准则（Code of Conduct for AI）
@@ -135,7 +141,7 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-**Project-specific verification**: single-file app, no test framework — verification process (py_compile, curl smoke, frontend visual checks) in `docs/guides/module-conventions.md` §6.
+**Project-specific verification**: multi-module app, no test framework — verification process (py_compile, curl smoke, frontend visual checks) in `docs/guides/module-conventions.md` §6.
 
 ---
 

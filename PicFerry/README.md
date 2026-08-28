@@ -15,9 +15,10 @@
 
 ### 方式二：源码运行
 
-需要 Python 3.10+，无需安装任何额外依赖。
+需要 Python 3.10+，无需安装任何额外依赖。运行入口为仓库内 `PicFerry/server.py`，在 `PicFerry/` 目录下执行：
 
 ```bash
+cd PicFerry
 python server.py
 ```
 
@@ -31,7 +32,7 @@ python server.py
 
 - **设备同步** — 设备 A/B 扫描比对、双向查重、哈希校验、一键同步
 - **Pixiv 查重** — 拉取 Pixiv 收藏（可限量/随时终止）与本地图片分p级比对
-- **更多设置** — 界面主题（深色/浅色日间模式）、缩略图尺寸、预览悬浮延迟、Pixiv 请求间隔、结果表行数上限；作品黑名单管理
+- **更多设置** — 界面主题（深色/浅色日间模式）、缩略图尺寸、预览悬浮延迟、Pixiv 请求间隔、结果表行数上限、Debug 诊断（默认关闭）；作品黑名单管理
 - **日志** — 实时彩色命令行日志（自动滚动 / 暂停 / 清空）
 
 ### 设备同步
@@ -69,6 +70,7 @@ python server.py
 | `[IMAGE]` | 灰色 | 图片代理加载失败 |
 | `[DONE]` | 绿色 | 扫描/同步全部完成 |
 | `[ERROR]` | 红色 | 任何环节出错 |
+| `[DEBUG]` | 橙色 | Debug 诊断耗时（模块导入/前端动作，需在「更多设置」开启 Debug 诊断） |
 
 ## 配置文件（可选）
 
@@ -88,6 +90,7 @@ pixivLimit = 0
 maxRows = 1000
 allowLan = 0
 lightTheme = 0
+debugMode = 0
 ```
 
 字段说明:
@@ -103,6 +106,7 @@ lightTheme = 0
 - `maxRows` — 结果表行数上限（设备同步/Pixiv 查重，10-5000，默认 1000）
 - `allowLan` — 绑定 0.0.0.0 开启局域网访问（0=仅本机，默认 0）；开启后可从局域网设备浏览器打开 http://<电脑IP>:13826
 - `lightTheme` — 界面主题（0=深色默认，1=浅色日间模式；入口在「更多设置 → 界面主题」）
+- `debugMode` — Debug 诊断（0=关闭默认，1=开启；入口在「更多设置」）。开启瞬间终端与网页日志输出各模块导入耗时 [DEBUG] 条目，期间前端上报配置保存/图片预览/结果表渲染耗时；与正常日志共享 500 条缓冲，诊断完请关闭
 
 **开启后局域网内任何设备均可无鉴权访问本服务并读写文件**
 
@@ -116,8 +120,10 @@ lightTheme = 0
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --name "PicFerry" server.py
+pyinstaller --onefile --name "PicFerry" --add-data "static;static" server.py
 ```
+
+`--add-data` 把 `static/` 前端文件打入 EXE（`webassets.py` 在运行时从 PyInstaller 解包目录读取它们），漏掉该参数会导致 EXE 启动报找不到静态文件。
 
 产出 `dist/PicFerry.exe`，约 7 MB（以重建后实测为准），不依赖 Python 环境。EXE 模式下配置文件落在 EXE 旁的 `config/` 文件夹（非临时目录）。
 
@@ -148,7 +154,16 @@ pyinstaller --onefile --name "PicFerry" server.py
 ## 项目结构
 
 ```
-├── server.py          Python 服务器（内嵌 HTML/CSS/JS，单文件）
+├── server.py          服务端装配与启动（python server.py 运行入口）
+├── handler.py         HTTP 路由层（SyncHandler 全部 /api/* 处理 + 声明权剥除）
+├── webassets.py       前端装配：读取 static/ 拼回完整页面
+├── static/            前端三件套（index.html / style.css / app.js）
+├── logging_util.py    日志工具（彩色终端输出 + 内存环形缓冲）
+├── config_store.py    配置读写（config.ini）
+├── pathsafety.py      本地路径安全（防目录穿越）
+├── datasources.py     HTTP/FTP/本地 数据源读取
+├── pixiv.py           Pixiv 收藏查重（后台 Job + 黑名单）
+├── verify.py          冒烟验证脚本（python verify.py）
 ├── dist/
 │   └── PicFerry.exe     打包后的独立可执行文件 (~7 MB)
 ├── config/            运行时文件目录（自动创建）
