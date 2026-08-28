@@ -33,15 +33,15 @@
   - 留空保存保留原值；**清空需手动编辑 config.ini**。
 - **PixivL** — Pixiv 查重时扫描的本地文件夹。
 
-### 数值键（`_CONFIG_KEYS` 注册表，`server.py:45`）
+### 数值键（`_CONFIG_KEYS` 注册表，`config_store.py:60`）
 
-数值键由 `_parse_config_value`（`server.py:55`）统一解析：空串/非数字回落默认值，越界钳制到 `[lo, hi]`，`bool` 键保存时转 `0/1`。
+数值键由 `_parse_config_value`（`config_store.py:71`）统一解析：空串/非数字回落默认值，越界钳制到 `[lo, hi]`，`bool` 键保存时转 `0/1`。
 
 - **thumbnailSize** — 设备同步页缩略图边长（px），影响布局密度。界面为下拉档位（特小16/小24/标准48/大64/特大96）；历史滑条遗留的档位外数值会自动显示为「自定义（Npx）」选项，选中任一档位后即归位。
 - **previewDelay** — 鼠标悬停文件名到弹出大图的延迟（ms）。
 - **pixivInterval** — Pixiv 收藏拉取的请求间隔（秒）。过低会触发 Pixiv 限流（403）。默认 0.8。
-- **pixivLimit** — 单次拉取的收藏上限，0 = 全部（`fetch_all_pixiv_bookmark_ids`，`server.py:1874`）。
-- **maxRows** — 设备同步 / Pixiv 查重结果表的最大行数，超出截断（`run_pixiv_job` 按作品数截断，`server.py:2014`）。
+- **pixivLimit** — 单次拉取的收藏上限，0 = 全部（`fetch_all_pixiv_bookmark_ids`，`pixiv.py:87`）。
+- **maxRows** — 设备同步 / Pixiv 查重结果表的最大行数，超出截断（`run_pixiv_job` 按作品数截断，`pixiv.py:229`）。
 - **allowLan** — 安全开关：
   - `0`（默认）：仅本机可访问，且 `_check_origin` 校验 Host ∈ `{127.0.0.1, localhost, ::1}`（防 DNS rebinding）。
   - `1`：绑定 `0.0.0.0`，局域网内任何设备均可访问。

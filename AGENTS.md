@@ -141,7 +141,7 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-**Project-specific verification**: single-file app, no test framework — verification process (py_compile, curl smoke, frontend visual checks) in `docs/guides/module-conventions.md` §6.
+**Project-specific verification**: multi-module app, no test framework — verification process (py_compile, curl smoke, frontend visual checks) in `docs/guides/module-conventions.md` §6.
 
 ---
 

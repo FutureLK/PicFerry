@@ -8,12 +8,12 @@
 ## 0. 速览：触碰点
 
 ```
-do_GET (server.py:2035) 或 do_POST (2064)   ← 加 elif 分支（必须位于 _check_origin 之后）
+do_GET (handler.py:175) 或 do_POST (204)   ← 加 elif 分支（必须位于 _check_origin 之后）
    │
-   ├─→ 写 _handle_* 方法（SyncHandler 内, 1976+）
+   ├─→ 写 _handle_* 方法（SyncHandler 内, handler.py:110+）
    │        │
-   │        ├─→ _send_json (1982) / _send_error (1999) 响应
-   │        └─→ console_log (156) 日志
+   │        ├─→ _send_json (117) / _send_error (134) 响应
+   │        └─→ console_log (logging_util.py:49) 日志
    │
    ├─→ 前端 JS（static/app.js）调用新端点   ← 如需要
    └─→ docs/api.md 端点总览表 + 详情            ← 必须
@@ -22,11 +22,11 @@ do_GET (server.py:2035) 或 do_POST (2064)   ← 加 elif 分支（必须位于 
 ## 1. 步骤
 
 **步骤 1：确认方法并在路由表加分支。**
-- GET 端点 → `do_GET`（`server.py:2035`）加 elif；POST 端点 → `do_POST`（`server.py:2064`）加 elif。
-- 注意路由分发前的 `_check_origin` 守卫（`server.py:2039`/`2068`）：**所有 `/api/` 请求自动经过它，新端点不需要也不能绕过**。分支本身不需要重复校验。
-- 路径匹配用精确相等（`parsed.path == '/api/ping'`）；有查询参数时 `parsed.query` 已由 `parse_qs` 解析进 `params`（`server.py:2037`）。
+- GET 端点 → `do_GET`（`handler.py:175`）加 elif；POST 端点 → `do_POST`（`handler.py:204`）加 elif。
+- 注意路由分发前的 `_check_origin` 守卫（`handler.py:179`/`208`）：**所有 `/api/` 请求自动经过它，新端点不需要也不能绕过**。分支本身不需要重复校验。
+- 路径匹配用精确相等（`parsed.path == '/api/ping'`）；有查询参数时 `parsed.query` 已由 `parse_qs` 解析进 `params`（`handler.py:177`）。
 
-**步骤 2：写 `_handle_*` 方法。** 在 `SyncHandler` 类内（`server.py:1976` 起）按现有 handler 风格添加：
+**步骤 2：写 `_handle_*` 方法。** 在 `SyncHandler` 类内（`handler.py:110` 起）按现有 handler 风格添加：
 
 ```python
 def _handle_ping(self):
@@ -35,28 +35,28 @@ def _handle_ping(self):
 ```
 
 关键约定：
-- **响应用 `_send_json`**（`server.py:1982`，自动 `ensure_ascii=False`）；错误用 `_send_error(code, msg)`（`server.py:1999`）或 JSON `{'error': ...}`。
-- **参数读取**：GET 用 `params.get('key', [None])[0]`；POST JSON 体参考 `_handle_pixiv_bookmarks`（`server.py:2168`）：读 `Content-Length` → `self.rfile.read` → `json.loads`，解析失败返回 `{'error': 'Invalid request body: ...'}`。
+- **响应用 `_send_json`**（`handler.py:117`，自动 `ensure_ascii=False`）；错误用 `_send_error(code, msg)`（`handler.py:134`）或 JSON `{'error': ...}`。
+- **参数读取**：GET 用 `params.get('key', [None])[0]`；POST JSON 体参考 `_handle_pixiv_bookmarks`（`handler.py:309`）：读 `Content-Length` → `self.rfile.read` → `json.loads`，解析失败返回 `{'error': 'Invalid request body: ...'}`。
 - **日志**：成功 `console_log('SCAN', ...)`，失败 `console_log('ERROR', ...)`。
 - **错误文本**：返回给前端的异常信息用 `_safe_error_text` 净化，不要直接 `str(e)`。
 
-**步骤 3：校验输入。** 缺参时返回 `{'error': 'Missing xxx parameter'}`（参考 `_handle_list`，`server.py:2095`），不要静默用默认值吞掉错误。
+**步骤 3：校验输入。** 缺参时返回 `{'error': 'Missing xxx parameter'}`（参考 `_handle_list`，`handler.py:235`），不要静默用默认值吞掉错误。
 
 **步骤 4：前端调用（如需要）。** 在 `static/app.js` 中 `fetch('/api/ping')`。跨端调用受 `_check_origin` 保护，同源页面无碍。
 
 **步骤 5：更新 `docs/api.md`。** 在端点总览表加一行（端点/方法/参数/说明/处理函数），如需细节再加一节"端点详情"。同步更新方法签名处行号。
 
 **步骤 6：验证。**
-- `python -m py_compile server.py`
+- `python -m py_compile server.py handler.py`
 - 启动服务后 curl 冒烟：`curl http://127.0.0.1:13826/api/ping` 应返回 `{"pong": true}`。
 - 跨源负例：带错误 `Origin` 头请求应返回 403（`_check_origin` 生效）。
 
 ## 2. 若端点是后台任务（Pixiv Job 模式）
 
-如果端点要启动一个长时间运行的任务（如扫描、拉取），参考现有 **单槽 Job 引擎**（`server.py:1837-1973`）：
-- 状态字典 + `threading.Event()` 停止事件 + `threading.Lock()`（`pixiv_job`，`server.py:1839`）。
-- 状态机阶段切换前**先检查 stop**（`run_pixiv_job`，`server.py:1863`），时序约束不可颠倒。
-- 启动用原子 check-and-set（`_start_pixiv_job`，`server.py:1958`），重复启动返回"已有任务在运行"。
+如果端点要启动一个长时间运行的任务（如扫描、拉取），参考现有 **单槽 Job 引擎**（pixiv.py，`pixiv_job` 从 203 行起）：
+- 状态字典 + `threading.Event()` 停止事件 + `threading.Lock()`（`pixiv_job`，`pixiv.py:203`）。
+- 状态机阶段切换前**先检查 stop**（`run_pixiv_job`，`pixiv.py:229`），时序约束不可颠倒。
+- 启动用原子 check-and-set（`_start_pixiv_job`，`pixiv.py:325`），重复启动返回"已有任务在运行"。
 - 提供轻量轮询端点（不含大结果）与终态结果端点两个口（对比 `/api/pixiv/job` 与 `/api/pixiv/job/result`）。
 
 ## 3. 检查清单
@@ -67,7 +67,7 @@ def _handle_ping(self):
 - [ ] 路径精确匹配，无歧义前缀冲突（注意 `/api/ping` 与 `/api/ping/xxx` 是不同路径）
 - [ ] 前端 JS 已调用（如需要）
 - [ ] `docs/api.md` 已更新（总览表 + 详情）
-- [ ] `python -m py_compile server.py` 通过
+- [ ] `python -m py_compile server.py handler.py` 通过
 - [ ] curl 冒烟通过；跨源请求返回 403
 - [ ] 未触碰红线：无第三方依赖、无明文 PHPSESSID、未引入未注册配置
 
@@ -88,26 +88,26 @@ Full procedure for adding an `/api/*` endpoint. Example: `GET /api/ping`.
 ## 0. Touch points
 
 ```
-do_GET (server.py:2035) or do_POST (2064)   ← add elif branch (must sit after the _check_origin guard)
-   ├─→ write _handle_* method (inside SyncHandler, 1976+)
-   │        ├─→ respond via _send_json (1982) / _send_error (1999)
-   │        └─→ log via console_log (156)
+do_GET (handler.py:175) or do_POST (204)   ← add elif branch (must sit after the _check_origin guard)
+   ├─→ write _handle_* method (inside SyncHandler, handler.py:110+)
+   │        ├─→ respond via _send_json (117) / _send_error (134)
+   │        └─→ log via console_log (logging_util.py:49)
    ├─→ frontend JS (static/app.js) calls the endpoint   ← if needed
    └─→ docs/api.md overview table + details                   ← required
 ```
 
 ## 1. Steps
 
-1. **Route**: add an elif in `do_GET` (2035) or `do_POST` (2064). The `_check_origin` guard (2039/2068) already covers all `/api/*` — do not duplicate or bypass it. Query params come pre-parsed in `params` (2037).
-2. **Handler**: add `_handle_ping` inside `SyncHandler` (1976+). Use `_send_json` (1982); for POST JSON bodies follow `_handle_pixiv_bookmarks` (2168): read `Content-Length` → `self.rfile.read` → `json.loads`, return `{'error': 'Invalid request body: ...'}` on failure. Log via `console_log`; sanitize exception text with `_safe_error_text`.
-3. **Validate input**: return `{'error': 'Missing xxx parameter'}` on missing params (like `_handle_list`, 2095); never swallow errors with silent defaults.
+1. **Route**: add an elif in `do_GET` (handler.py:175) or `do_POST` (204). The `_check_origin` guard (handler.py:179/208) already covers all `/api/*` — do not duplicate or bypass it. Query params come pre-parsed in `params` (handler.py:177).
+2. **Handler**: add `_handle_ping` inside `SyncHandler` (handler.py:110+). Use `_send_json` (117); for POST JSON bodies follow `_handle_pixiv_bookmarks` (handler.py:309): read `Content-Length` → `self.rfile.read` → `json.loads`, return `{'error': 'Invalid request body: ...'}` on failure. Log via `console_log`; sanitize exception text with `_safe_error_text`.
+3. **Validate input**: return `{'error': 'Missing xxx parameter'}` on missing params (like `_handle_list`, handler.py:235); never swallow errors with silent defaults.
 4. **Frontend** (if needed): `fetch('/api/ping')` in `static/app.js`.
 5. **Docs**: add a row to `docs/api.md` overview table (+ a details section if warranted).
-6. **Verify**: `python -m py_compile server.py`; curl smoke; cross-origin request with a bad `Origin` must return 403.
+6. **Verify**: `python -m py_compile server.py handler.py`; curl smoke; cross-origin request with a bad `Origin` must return 403.
 
 ## 2. Background-task endpoints (Pixiv Job pattern)
 
-For long-running endpoints, copy the single-slot Job engine (`server.py:1837-1973`): state dict + `threading.Event()` stop + `threading.Lock()` (`pixiv_job`, 1839); check `stop` before every expensive phase (`run_pixiv_job`, 1863); atomic check-and-set start (`_start_pixiv_job`, 1958) that rejects concurrent runs; split lightweight status polling vs final-result endpoints (compare `/api/pixiv/job` vs `/api/pixiv/job/result`).
+For long-running endpoints, copy the single-slot Job engine (pixiv.py, `pixiv_job` from line 203): state dict + `threading.Event()` stop + `threading.Lock()` (`pixiv_job`, 203); check `stop` before every expensive phase (`run_pixiv_job`, 229); atomic check-and-set start (`_start_pixiv_job`, 325) that rejects concurrent runs; split lightweight status polling vs final-result endpoints (compare `/api/pixiv/job` vs `/api/pixiv/job/result`).
 
 ## 3. Checklist
 
