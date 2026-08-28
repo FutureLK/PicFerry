@@ -17,7 +17,8 @@ import threading
 import time
 import mimetypes
 import configparser
-from logging_util import LOG_COLORS, RESET, _USE_COLOR, LOG_BUFFER, LOG_SEQ, LOG_LAST_ID, LOG_LOCK, console_log
+import logging_util
+from logging_util import LOG_COLORS, RESET, _USE_COLOR, LOG_BUFFER, LOG_SEQ, LOG_LOCK, console_log
 from config_store import CONFIG_DIR, load_config, save_config
 from pathsafety import is_local_path, strip_file_prefix, _safe_error_text, _sanitize_rel_path, _declared_local_bases, _check_local_base, _check_realpath_within, _assert_declared_scan_base
 from datasources import IMAGE_EXTS, is_ftp, resolve_url, parse_ftp_info, http_fetch, http_download, http_put, ftp_list, ftp_download, ftp_upload, parse_html_listing, local_list, _read_remote_file
@@ -2169,7 +2170,7 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
             since = 0
         with LOG_LOCK:
             items = list(LOG_BUFFER)
-            next_id = LOG_LAST_ID
+            next_id = logging_util.LOG_LAST_ID
             truncated = since > 0 and (
                 len(items) == 0 or items[0][0] > since or since > next_id
             )

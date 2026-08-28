@@ -6,6 +6,9 @@
   b. GET /api/config 返回 200 且为 JSON
   c. 带伪造 Origin: http://evil.com 的 GET /api/list 必须返回 403
   d. GET /api/list?url=<含 2 张图片的临时目录> 返回 files 数量为 2
+  e. GET /api/logs?since=0 返回 next_id > 0
+  f. GET /api/log 写入探针日志后, since=<next_id> 增量轮询只返回该条且 next_id 前进
+  g. since 超前于 next_id 时 truncated 为 True 且 logs 为空
 
 用法: python verify.py
 全部通过打印 ALL CHECKS PASSED 并以 0 退出; 任一失败打印失败项并以非零码退出。
@@ -134,7 +137,8 @@ def stop(proc):
 
 
 def run_assertions(imgs):
-    """四条断言: a 首页 / b 配置 JSON / c 同源闸门 403 / d 本地基座列目录"""
+    """七条断言: a 首页 / b 配置 JSON / c 同源闸门 403 / d 本地基座列目录 /
+    e 日志 next_id>0 / f 日志增量轮询 / g 日志 truncated 语义"""
     status, body = http_get('/')
     check('a. GET / 返回 200 且含 "PicFerry"',
           status == 200 and 'PicFerry' in body.decode('utf-8', 'replace'),
@@ -168,6 +172,54 @@ def run_assertions(imgs):
                 n = len(data.get('files', []))
                 ok, detail = (n == 2), f'files 数量={n}（期望 2）'
     check('d. GET /api/list?url=<临时图片目录> 返回 files 数量为 2', ok, detail)
+
+    # e/f/g: 日志增量轮询协议（回归防线: LOG_LAST_ID 的 from-import 快照曾使 next_id 恒为 0;
+    # 各断言之间服务端无其他日志写入源, 探针是两轮轮询间唯一新增, 断言确定性成立）
+    status, body = http_get('/api/logs?since=0')
+    ok, detail, next_id = False, f'status={status}', 0
+    if status == 200:
+        try:
+            data = json.loads(body.decode('utf-8'))
+        except (UnicodeDecodeError, ValueError) as e:
+            detail = f'响应不是合法 JSON — {e}'
+        else:
+            next_id = data.get('next_id', 0)
+            ok = isinstance(next_id, int) and next_id > 0
+            detail = f'next_id={next_id!r}'
+    check('e. GET /api/logs?since=0 返回 next_id > 0', ok, detail)
+
+    status, body = http_get('/api/log?' + urllib.parse.urlencode(
+        {'msg': 'verify-log-probe', 'cat': 'INFO'}))
+    probe_ok = status == 200
+    detail = f'status={status}'
+    status, body = http_get('/api/logs?since=' + str(next_id))
+    ok = False
+    if probe_ok and status == 200:
+        try:
+            data = json.loads(body.decode('utf-8'))
+        except (UnicodeDecodeError, ValueError) as e:
+            detail = f'响应不是合法 JSON — {e}'
+        else:
+            logs = data.get('logs', [])
+            ok = (len(logs) == 1 and logs[0].get('msg') == 'verify-log-probe'
+                  and logs[0].get('id', 0) > next_id and data.get('next_id', 0) > next_id)
+            detail = f'logs={logs!r} next_id={data.get("next_id")!r}'
+    elif not probe_ok:
+        detail = f'探针写入失败, status={detail}'
+        ok = False
+    check('f. 写入探针日志后, since=<next_id> 只返回该条且 next_id 前进', ok, detail)
+
+    status, body = http_get('/api/logs?since=' + str(next_id + 1000))
+    ok, detail = False, f'status={status}'
+    if status == 200:
+        try:
+            data = json.loads(body.decode('utf-8'))
+        except (UnicodeDecodeError, ValueError) as e:
+            detail = f'响应不是合法 JSON — {e}'
+        else:
+            ok = data.get('truncated') is True and data.get('logs') == []
+            detail = f'truncated={data.get("truncated")!r} logs={data.get("logs")!r}'
+    check('g. since 超前于 next_id 时 truncated 为 True 且 logs 为空', ok, detail)
 
 
 def main():
