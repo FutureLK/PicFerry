@@ -190,6 +190,7 @@ def main():
         (imgs / 'b.png').write_bytes(PNG_1PX)
         seed_config(tmp, imgs)
         shutil.copy2(SERVER_SRC, tmp / 'server.py')
+        shutil.copy2(BASE / 'logging_util.py', tmp / 'logging_util.py')
 
         log_path = tmp / 'server_output.log'
         with open(log_path, 'wb') as log_file:
