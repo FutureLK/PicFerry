@@ -1,6 +1,6 @@
 # docs/guides/module-conventions.md — 模块约定与结构地图
 
-`server.py`（约 534 行）是服务端主文件：HTTP 服务与业务逻辑都在这里。前端 HTML/CSS/JS 已拆分为 `static/` 真实文件（index.html / style.css / app.js），由 `webassets.py` 在导入期装配回完整 `HTML`；日志/配置/路径安全/数据源/Pixiv 引擎外移到同目录一方模块（logging_util.py / config_store.py / pathsafety.py / datasources.py / pixiv.py）。本文档是**代码内部结构地图** + 模块组织约定，说明每个行区放什么、新增代码该放哪里、按什么风格写。
+`server.py`（约 132 行）是服务端主文件：导入装配 + 服务启动；HTTP 路由层已拆到 `handler.py`（`SyncHandler`，约 457 行）。前端 HTML/CSS/JS 已拆分为 `static/` 真实文件（index.html / style.css / app.js），由 `webassets.py` 在导入期装配回完整 `HTML`；日志/配置/路径安全/数据源/Pixiv 引擎外移到同目录一方模块（logging_util.py / config_store.py / pathsafety.py / datasources.py / pixiv.py / handler.py）。本文档是**代码内部结构地图** + 模块组织约定，说明每个行区放什么、新增代码该放哪里、按什么风格写。
 
 > 目标读者：AI。
 > 行号为编写时快照，定位源码请以符号名为准。**本表随代码维护——AI 改动代码后必须同步更新对应行区**（AGENTS.md §3.9 文档义务）。
@@ -9,7 +9,7 @@
 
 | 行区 | 内容 | 新增代码放哪 |
 |---|---|---|
-| 1-25 | 导入：纯标准库(1-19) + 一方模块 from-import（logging_util / config_store / pathsafety / datasources / **webassets**(25，提供 `HTML`)） | 新 import 加到这里（**仅标准库 + 一方模块**） |
+| 20-41 | 导入：纯标准库(1-19) + 一方模块 from-import（logging_util / config_store / pathsafety / datasources / **webassets** / pixiv / handler），导入期逐模块 `perf_counter` 计时写入 `logging_util.IMPORT_TIMING`（debug 诊断数据源） | 新 import 加到这里（**仅标准库 + 一方模块**） |
 | 27 | `PORT=13826`（`IMAGE_EXTS` 已外移 datasources.py） | 模块级常量加在附近 |
 | 30-50 | **声明权控制**：`strip_remote_locked_keys`(35)——远程写配置时剥除本地盘声明与 PHPSESSID | 同类安全逻辑 |
 | 52-53 | **前端装配分区**：`HTML` 由 webassets.py 读 `static/` 三件套在导入期拼回（逐字节等价拆分前常量），`_send_html`(117) 下发 | **前端改动改 static/ 对应文件**；装配逻辑改 webassets.py |
@@ -22,6 +22,7 @@
 | — | **datasources.py**：`ftp_list`(54)/`ftp_download`(95)/`ftp_upload`(111)/`local_list`(152)/`http_fetch`(35)/`http_put`(46) 等数据源读取 | 新的数据源读取函数 |
 | — | **pixiv.py**：`fetch_all_pixiv_bookmark_ids`(87) 收藏拉取（分页/限量/可终止）+ 单槽 Job 引擎 `pixiv_job`(203)/`run_pixiv_job`(229)/`_start_pixiv_job`(325) + 黑名单读写 `load_blacklist`(27)/`save_blacklist`(50) | Pixiv 逻辑 / 后台任务引擎 |
 | — | **webassets.py + static/**：前端三件套 `static/{index.html, style.css, app.js}`——index.html 为骨架，`<style>`/`<script>` 标签保留、块内容位置是 `@@CSS@@`/`@@JS@@` 占位符；`resource_dir()` 兼容 PyInstaller（frozen 取 `sys._MEIPASS`，打包需 `--add-data "static;static"`） | 前端结构 / 装配逻辑改动 |
+| — | **handler.py**：`SyncHandler(BaseHTTPRequestHandler)` HTTP 路由层（`_check_origin` / `do_GET` / `do_POST` + 全部 `_handle_*`）+ `strip_remote_locked_keys`（声明权剥除）+ `_emit_import_timing`（debugMode 关→开时补发模块导入耗时，数据只读自 `logging_util.IMPORT_TIMING`） | 新 API handler 加在这里 |
 
 ## 2. 关键约定
 

@@ -37,6 +37,19 @@ def strip_remote_locked_keys(data: dict):
     return removed
 
 
+# ─── Debug 诊断 ──────────────────────────────────────────────────────────────
+# 导入耗时数据在 server.py 导入区采集(常驻 logging_util.IMPORT_TIMING);
+# debugMode 由关转开时补发, 开关即时生效无需重启。经 logging_util 属性访问只读。
+
+def _emit_import_timing():
+    timing = logging_util.IMPORT_TIMING
+    total = 0
+    for name, ms in timing.items():
+        console_log('DEBUG', f'模块导入 {name}: {ms} ms')
+        total += ms
+    console_log('DEBUG', f'模块导入合计: {total} ms')
+
+
 class SyncHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
     timeout = 60   # 连接读超时(秒): 空闲/慢连接不再无限占用工作线程
@@ -430,10 +443,14 @@ class SyncHandler(http.server.BaseHTTPRequestHandler):
                 dropped = strip_remote_locked_keys(data)
                 if dropped:
                     console_log('INFO', f'远程提交已忽略本机专属键: {",".join(dropped)}')
+            # debug 关→开检测: 保存前取旧值, 保存后回读新值(两次串行 load_config, 不嵌套持锁)
+            debug_prev = bool(load_config().get('debugMode')) if 'debugMode' in data else None
             if not save_config(data):
                 # 文件损坏拒绝覆盖(防凭证被默认值抹除) / 写盘失败
                 self._send_json({'error': '配置未保存：config.ini 损坏或写入失败，见服务端日志'})
                 return
+            if debug_prev is False and bool(load_config().get('debugMode')):
+                _emit_import_timing()
             self._send_json({'ok': True})
         except Exception as e:
             console_log('ERROR', f'配置保存失败: {e}')

@@ -26,6 +26,7 @@
   --warn:#d29922;
   --cyan:#39c5cf;         /* 日志分类 SCAN */
   --violet:#bc8cff;       /* 日志分类 BLACKLIST */
+  --debug:#f0883e;        /* 日志分类 DEBUG */
 }
 html[data-theme="light"]{
   color-scheme:light;
@@ -50,6 +51,7 @@ html[data-theme="light"]{
   --warn:#9a6700;
   --cyan:#1b7c83;
   --violet:#8250df;
+  --debug:#bc4c00;
 }
 /* 全局缩放系数：按参考站 benchmark.leoblack.top 实测字号比（表格 0.92rem≈14.7px vs 本应用 13px≈1.13）取 1.15；容器宽度不追平基准站 1320px；如需调整只改这一处 */
 html{zoom:1.15}
@@ -176,3 +178,4 @@ tr.row-enter{animation:fadeIn .35s ease-out both}
 .log-line .cat-ERROR{color:var(--err)}
 .log-line .cat-INFO{color:var(--text)}
 .log-line .cat-BLACKLIST{color:var(--violet)}
+.log-line .cat-DEBUG{color:var(--debug)}

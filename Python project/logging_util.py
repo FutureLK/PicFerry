@@ -18,8 +18,14 @@ LOG_COLORS = {
     'DONE': '\033[92m',    # green
     'ERROR': '\033[91m',   # red
     'BLACKLIST': '\033[95m',
+    'DEBUG': '\033[38;5;208m',   # orange(256色): debug 诊断条目
 }
 RESET = '\033[0m'
+
+# ─── 导入耗时注册表（debug 诊断）──────────────────────────────────────────────
+# 本模块是叶子(只依赖标准库), 由 server.py 导入区以 time.perf_counter 逐模块计时写入;
+# handler.py 经 import logging_util 属性访问只读(勿 from-import 后重绑定, 参照 LOG_LAST_ID 教训)
+IMPORT_TIMING = {}
 
 # ─── 内存日志环形缓冲（供网页日志面板轮询）─────────────────────────────────
 LOG_BUFFER = collections.deque(maxlen=500)

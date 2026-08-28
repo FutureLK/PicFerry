@@ -55,6 +55,7 @@ let progressOwner = null; // 进度条归属: 'hash' | 'scan' | 'sync' | null（
 
 // ─── Config auto-fill & save ───────────────────────────────────
 let globalConfig = null;   // 供设置 tab / 预览延迟 / 缩略图尺寸读取
+let debugModeOn = false;   // debug 诊断开关镜像: 开启期间前端以 [DEBUG] 上报动作耗时
 
 function applyTheme(light) {
   // 日间模式开关: html[data-theme=light] 触发 CSS 浅色变量覆盖层
@@ -96,15 +97,18 @@ async function saveConfig() {
     pixivInterval: settingPixivInterval.value,
     maxRows: settingMaxRows.value,
     lightTheme: settingTheme.value === '1' ? 1 : 0,
+    debugMode: settingDebug.value === '1' ? 1 : 0,
   };
   const _p = document.getElementById('pixivPhpsessid').value.trim();
   if (_p) data.PHPSESSID = _p;
+  const _t0 = performance.now();
   try {
     await fetch('/api/config/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    debugTime('配置保存', _t0);
   } catch (e) {
     // 保存失败静默忽略
   }
@@ -199,6 +203,16 @@ dirBtns.forEach(btn => {
 
 function logToServer(cat, msg) {
   fetch('/api/log?cat=' + encodeURIComponent(cat) + '&msg=' + encodeURIComponent(msg), { method: 'POST' }).catch(() => {});
+}
+
+function debugLog(msg) {
+  // debug 诊断: 仅开关开启期间上报, 走 /api/log 统一双通道(stderr + 网页面板)
+  if (debugModeOn) logToServer('DEBUG', msg);
+}
+
+function debugTime(label, t0) {
+  // 统一格式: [DEBUG] 动作描述: N ms(毫秒整数)
+  debugLog(label + ': ' + Math.round(performance.now() - t0) + ' ms');
 }
 
 function setStatus(msg, type) {
@@ -338,6 +352,7 @@ function runDedup() {
 }
 
 function renderTable() {
+  const _t0 = performance.now();
   const RENDER_LIMIT = parseInt((globalConfig || {}).maxRows) || 1000;
   let html = '';
   const srcUrl = scanDir === 'ab' ? urlB.value.trim() : urlA.value.trim();
@@ -373,6 +388,7 @@ function renderTable() {
       updateSyncBtn();
     });
   });
+  debugTime('结果表渲染 ' + currentFiles.length + ' 行', _t0);
 }
 
 // ─── 缩略图懒加载（IntersectionObserver 按需赋值 src）────────────────
@@ -419,6 +435,7 @@ function bindPreviewHover() {
       // 预览延迟可配置 (config previewDelay, 默认 500ms); null 保护防 loadConfig 未完成
       const delay = parseInt((globalConfig || {}).previewDelay) || 500;
       previewTimer = setTimeout(() => {
+        const _t0 = performance.now();
         const rect = this.getBoundingClientRect();
         previewName.textContent = f.name + (f.size != null ? ' (' + formatSize(f.size) + ')' : '');
         const url = '/api/image?url=' + encodeURIComponent(srcUrl) + '&file=' + encodeURIComponent(f.name);
@@ -426,6 +443,7 @@ function bindPreviewHover() {
         // 图片加载完成才显示面板(防未就绪空框), 再定位
         const show = function() {
           if (seq !== previewSeq) return;   // 迟到的加载: 已换行/已离开, 丢弃
+          debugTime('预览加载 ' + f.name, _t0);   // 同图捷径(L441)直显时≈0ms, 语义为缓存命中
           previewPanel.classList.add('active');
           const panelH = previewPanel.offsetHeight || 480;
 
@@ -694,6 +712,7 @@ async function pollPixivJob() {
 }
 
 function renderPixivResult(summary, matched) {
+  const _t0 = performance.now();
   document.getElementById('pixivTotal').textContent = summary ? (summary.total_bookmarks ?? 0) : 0;
   document.getElementById('pixivMissing').textContent = summary ? (summary.missing_works ?? 0) : 0;
   document.getElementById('pixivMissingPages').textContent = summary ? (summary.missing_pages ?? 0) : 0;
@@ -748,6 +767,7 @@ function renderPixivResult(summary, matched) {
   } else {
     setPixivStatus('没有缺失作品，收藏完整', 'success');
   }
+  debugTime('Pixiv 结果渲染 ' + matched.length + ' 行', _t0);
 }
 
 function stopPixivJob() {
@@ -780,7 +800,7 @@ syncBtn.addEventListener('click', doSync);
 // ─── 日志面板（轮询 /api/logs; 六色映射; 自动滚动/暂停/清空）─────────
 let logLastId = 0;
 let logPaused = false;
-const CATS = ['SCAN', 'HASH', 'SYNC', 'IMAGE', 'DONE', 'ERROR', 'BLACKLIST'];
+const CATS = ['SCAN', 'HASH', 'SYNC', 'IMAGE', 'DONE', 'ERROR', 'BLACKLIST', 'DEBUG'];
 
 async function pollLogs() {
   if (logPaused) return;
@@ -833,6 +853,7 @@ const settingTheme = document.getElementById('settingTheme');
 const settingPreviewDelay = document.getElementById('settingPreviewDelay');
 const settingPixivInterval = document.getElementById('settingPixivInterval');
 const settingMaxRows = document.getElementById('settingMaxRows');
+const settingDebug = document.getElementById('settingDebug');
 
 // 缩略图尺寸档位（与 settingThumbSize 下拉选项一致）
 const THUMB_PRESETS = [16, 24, 48, 64, 96];
@@ -855,6 +876,8 @@ function fillSettingsControls() {
   settingPixivInterval.value = cfg.pixivInterval != null ? cfg.pixivInterval : 0.8;
   settingMaxRows.value = cfg.maxRows != null ? cfg.maxRows : 1000;
   settingTheme.value = cfg.lightTheme ? '1' : '0';
+  settingDebug.value = cfg.debugMode ? '1' : '0';
+  debugModeOn = !!cfg.debugMode;
 }
 
 // 缩略图/主题下拉: change 即联动生效, 持久化由下方统一 blur/change 绑定完成
@@ -864,7 +887,10 @@ settingThumbSize.addEventListener('change', function() {
 settingTheme.addEventListener('change', function() {
   applyTheme(this.value === '1');
 });
-[settingThumbSize, settingTheme, settingPreviewDelay, settingPixivInterval, settingMaxRows].forEach(el => {
+settingDebug.addEventListener('change', function() {
+  debugModeOn = this.value === '1';   // debug 门控即时生效, 持久化由下方统一绑定完成
+});
+[settingThumbSize, settingTheme, settingPreviewDelay, settingPixivInterval, settingMaxRows, settingDebug].forEach(el => {
   el.addEventListener('blur', saveConfig);
   el.addEventListener('change', saveConfig);
 });

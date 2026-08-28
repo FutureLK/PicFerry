@@ -184,6 +184,14 @@
         <input type="number" id="settingMaxRows" min="10" max="5000" step="10">
         <div class="input-hint">设备同步扫描结果与 Pixiv 查重结果两张结果表的行数上限，与日志、缩略图无关</div>
       </div>
+      <div class="input-group">
+        <label for="settingDebug">Debug 诊断</label>
+        <select id="settingDebug">
+          <option value="0">关闭（默认）</option>
+          <option value="1">开启</option>
+        </select>
+        <div class="input-hint">开启后向终端与网页日志输出 [DEBUG] 耗时条目（模块导入、前端动作），会占用日志缓冲，诊断完请关闭</div>
+      </div>
       </div>
     </div>
     <div class="card">

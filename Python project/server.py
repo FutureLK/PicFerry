@@ -17,12 +17,28 @@ import threading
 import time
 import mimetypes
 import configparser
+# 一方模块导入期逐模块计时(debug 诊断): 数据常驻 logging_util.IMPORT_TIMING,
+# debugMode 由关转开时由 handler 补发, 无需重启
+_t_imp = time.perf_counter()
 import logging_util
 from logging_util import LOG_COLORS, RESET, _USE_COLOR, LOG_BUFFER, LOG_SEQ, LOG_LOCK, console_log
+logging_util.IMPORT_TIMING['logging_util'] = round((time.perf_counter() - _t_imp) * 1000)
+
+_t_imp = time.perf_counter()
 from config_store import CONFIG_DIR, load_config, save_config
+logging_util.IMPORT_TIMING['config_store'] = round((time.perf_counter() - _t_imp) * 1000)
+
+_t_imp = time.perf_counter()
 from pathsafety import is_local_path, strip_file_prefix, _safe_error_text, _sanitize_rel_path, _declared_local_bases, _check_local_base, _check_realpath_within, _assert_declared_scan_base
+logging_util.IMPORT_TIMING['pathsafety'] = round((time.perf_counter() - _t_imp) * 1000)
+
+_t_imp = time.perf_counter()
 from datasources import IMAGE_EXTS, is_ftp, resolve_url, parse_ftp_info, http_fetch, http_download, http_put, ftp_list, ftp_download, ftp_upload, parse_html_listing, local_list, _read_remote_file
+logging_util.IMPORT_TIMING['datasources'] = round((time.perf_counter() - _t_imp) * 1000)
+
+_t_imp = time.perf_counter()
 from webassets import HTML
+logging_util.IMPORT_TIMING['webassets'] = round((time.perf_counter() - _t_imp) * 1000)
 
 PORT = 13826
 
@@ -74,9 +90,13 @@ PORT = 13826
 #   2) 前端: 在 static/index.html 加控件/面板（或按 TABS 注册表新增标签页）
 #   3) 验证: 参考 .omo/evidence/pixiv-web-upgrade/ 各 task 的 QA 模式写 curl/Playwright 验收
 
+_t_imp = time.perf_counter()
 from pixiv import pixiv_job, _start_pixiv_job, load_blacklist, save_blacklist, normalize_illust_id
+logging_util.IMPORT_TIMING['pixiv'] = round((time.perf_counter() - _t_imp) * 1000)
 
+_t_imp = time.perf_counter()
 from handler import SyncHandler
+logging_util.IMPORT_TIMING['handler'] = round((time.perf_counter() - _t_imp) * 1000)
 
 # ─── Server ──────────────────────────────────────────────────────────────────
 

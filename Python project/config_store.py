@@ -65,6 +65,7 @@ _CONFIG_KEYS = {
     'maxRows':        (1000, 10,    5000,   'int'),    # 行数上限
     'allowLan': (0, 0, 1, 'bool'),    # 0=仅本机 1=局域网
     'lightTheme': (0, 0, 1, 'bool'),  # 0=深色(默认) 1=浅色(日间模式)
+    'debugMode': (0, 0, 1, 'bool'),   # 0=关闭(默认) 1=Debug诊断([DEBUG]耗时条目)
 }
 
 def _parse_config_value(key, raw):
