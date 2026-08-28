@@ -192,6 +192,7 @@ def main():
         shutil.copy2(SERVER_SRC, tmp / 'server.py')
         shutil.copy2(BASE / 'logging_util.py', tmp / 'logging_util.py')
         shutil.copy2(BASE / 'config_store.py', tmp / 'config_store.py')
+        shutil.copy2(BASE / 'pathsafety.py', tmp / 'pathsafety.py')
 
         log_path = tmp / 'server_output.log'
         with open(log_path, 'wb') as log_file:
