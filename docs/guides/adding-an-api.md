@@ -15,7 +15,7 @@ do_GET (server.py:2035) 或 do_POST (2064)   ← 加 elif 分支（必须位于 
    │        ├─→ _send_json (1982) / _send_error (1999) 响应
    │        └─→ console_log (156) 日志
    │
-   ├─→ 前端 JS（HTML 常量内, 185+）调用新端点   ← 如需要
+   ├─→ 前端 JS（static/app.js）调用新端点   ← 如需要
    └─→ docs/api.md 端点总览表 + 详情            ← 必须
 ```
 
@@ -42,7 +42,7 @@ def _handle_ping(self):
 
 **步骤 3：校验输入。** 缺参时返回 `{'error': 'Missing xxx parameter'}`（参考 `_handle_list`，`server.py:2095`），不要静默用默认值吞掉错误。
 
-**步骤 4：前端调用（如需要）。** 在 `HTML` 常量（`server.py:185+`）的 JS 中 `fetch('/api/ping')`。跨端调用受 `_check_origin` 保护，同源页面无碍。
+**步骤 4：前端调用（如需要）。** 在 `static/app.js` 中 `fetch('/api/ping')`。跨端调用受 `_check_origin` 保护，同源页面无碍。
 
 **步骤 5：更新 `docs/api.md`。** 在端点总览表加一行（端点/方法/参数/说明/处理函数），如需细节再加一节"端点详情"。同步更新方法签名处行号。
 
@@ -92,7 +92,7 @@ do_GET (server.py:2035) or do_POST (2064)   ← add elif branch (must sit after 
    ├─→ write _handle_* method (inside SyncHandler, 1976+)
    │        ├─→ respond via _send_json (1982) / _send_error (1999)
    │        └─→ log via console_log (156)
-   ├─→ frontend JS (HTML constant, 185+) calls the endpoint   ← if needed
+   ├─→ frontend JS (static/app.js) calls the endpoint   ← if needed
    └─→ docs/api.md overview table + details                   ← required
 ```
 
@@ -101,7 +101,7 @@ do_GET (server.py:2035) or do_POST (2064)   ← add elif branch (must sit after 
 1. **Route**: add an elif in `do_GET` (2035) or `do_POST` (2064). The `_check_origin` guard (2039/2068) already covers all `/api/*` — do not duplicate or bypass it. Query params come pre-parsed in `params` (2037).
 2. **Handler**: add `_handle_ping` inside `SyncHandler` (1976+). Use `_send_json` (1982); for POST JSON bodies follow `_handle_pixiv_bookmarks` (2168): read `Content-Length` → `self.rfile.read` → `json.loads`, return `{'error': 'Invalid request body: ...'}` on failure. Log via `console_log`; sanitize exception text with `_safe_error_text`.
 3. **Validate input**: return `{'error': 'Missing xxx parameter'}` on missing params (like `_handle_list`, 2095); never swallow errors with silent defaults.
-4. **Frontend** (if needed): `fetch('/api/ping')` in the JS inside the `HTML` constant (185+).
+4. **Frontend** (if needed): `fetch('/api/ping')` in `static/app.js`.
 5. **Docs**: add a row to `docs/api.md` overview table (+ a details section if warranted).
 6. **Verify**: `python -m py_compile server.py`; curl smoke; cross-origin request with a bad `Origin` must return 403.
 

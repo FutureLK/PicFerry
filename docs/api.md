@@ -16,7 +16,7 @@
 
 | 端点 | 方法 | 参数 | 说明 | 处理函数 |
 |---|---|---|---|---|
-| `/` | GET | — | 返回内嵌网页（`HTML` 常量） | `_send_html`(1991) |
+| `/` | GET | — | 返回完整网页（webassets.py 从 `static/` 装配） | `_send_html`(117) |
 | `/api/list` | GET | `url` | 扫描设备文件列表（HTTP/FTP/本地） | `_handle_list`(2095) |
 | `/api/hash` | POST | `url`, `file` | 计算远程文件 SHA256 | `_handle_hash`(2119) |
 | `/api/copy` | POST | `from`, `to`, `file` | 同步单个文件（来源→目标） | `_handle_copy`(2134) |
@@ -126,7 +126,7 @@ Contract for every `/api/*` endpoint. All `/api/*` requests must pass the same-o
 
 | Endpoint | Method | Params | Purpose | Handler |
 |---|---|---|---|---|
-| `/` | GET | — | Embedded web UI (`HTML` constant) | `_send_html`(1991) |
+| `/` | GET | — | Full web UI (assembled from `static/` by webassets.py) | `_send_html`(117) |
 | `/api/list` | GET | `url` | List device image files (HTTP/FTP/local) | `_handle_list`(2095) |
 | `/api/hash` | POST | `url`, `file` | SHA256 of a remote file | `_handle_hash`(2119) |
 | `/api/copy` | POST | `from`, `to`, `file` | Sync one file (source→target) | `_handle_copy`(2134) |

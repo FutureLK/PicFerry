@@ -20,7 +20,11 @@ This document is the project constitution for AI agents. Read and follow it befo
 ├── README.md                 ← 根说明（人类）
 ├── docs/                     ← 文档库（AI + 人类），规则见 docs/README.md
 ├── Python project/           ← 唯一代码目录
-│   ├── server.py             ← 全部代码（单文件，见 §4 结构地图）
+│   ├── server.py             ← 服务端主文件（HTTP 服务 + 业务逻辑，见 §4 结构地图）
+│   ├── webassets.py          ← 前端装配：读 static/ 三件套拼回完整 HTML
+│   ├── static/               ← 前端真实文件（index.html / style.css / app.js）
+│   ├── logging_util.py config_store.py pathsafety.py datasources.py pixiv.py
+│   │                         ← 自 server.py 外移的一方模块（日志/配置/路径安全/数据源/Pixiv）
 │   ├── README.md             ← 用户文档（功能/API/打包）
 │   ├── config/               ← 运行时文件目录（自动创建，不入库）
 │   │   ├── config.ini        ← 用户配置（旧版根目录散落文件首次启动自动迁入）
@@ -49,7 +53,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 
 ## 4. 注意事项（代码导航）
 
-`server.py` 是单文件应用（纯标准库，前端内嵌在 `HTML` 常量）。**代码内部结构地图（行区表）、新增代码位置与关键约定见 `docs/guides/module-conventions.md` §1-§2**；该文档随代码维护，AI 改动代码后必须同步（§3.9 文档义务）。
+`server.py` 是服务端主文件（纯标准库）；前端 HTML/CSS/JS 拆分在 `static/`（index.html/style.css/app.js），由 `webassets.py` 在导入期装配回完整 `HTML`，服务端零路由变化。日志/配置/路径安全/数据源/Pixiv 在同目录一方模块。**代码内部结构地图（行区表）、新增代码位置与关键约定见 `docs/guides/module-conventions.md` §1-§2**；该文档随代码维护，AI 改动代码后必须同步（§3.9 文档义务）。
 
 ## 5. 对话要求
 

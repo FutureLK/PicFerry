@@ -116,8 +116,10 @@ lightTheme = 0
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --name "PicFerry" server.py
+pyinstaller --onefile --name "PicFerry" --add-data "static;static" server.py
 ```
+
+`--add-data` 把 `static/` 前端文件打入 EXE（`webassets.py` 在运行时从 PyInstaller 解包目录读取它们），漏掉该参数会导致 EXE 启动报找不到静态文件。
 
 产出 `dist/PicFerry.exe`，约 7 MB（以重建后实测为准），不依赖 Python 环境。EXE 模式下配置文件落在 EXE 旁的 `config/` 文件夹（非临时目录）。
 
@@ -148,7 +150,14 @@ pyinstaller --onefile --name "PicFerry" server.py
 ## 项目结构
 
 ```
-├── server.py          Python 服务器（内嵌 HTML/CSS/JS，单文件）
+├── server.py          Python 服务器（HTTP 服务与业务逻辑）
+├── webassets.py       前端装配：读取 static/ 拼回完整页面
+├── static/            前端三件套（index.html / style.css / app.js）
+├── logging_util.py    日志工具（彩色终端输出 + 内存环形缓冲）
+├── config_store.py    配置读写（config.ini）
+├── pathsafety.py      本地路径安全（防目录穿越）
+├── datasources.py     HTTP/FTP/本地 数据源读取
+├── pixiv.py           Pixiv 收藏查重（后台 Job + 黑名单）
 ├── dist/
 │   └── PicFerry.exe     打包后的独立可执行文件 (~7 MB)
 ├── config/            运行时文件目录（自动创建）

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PicFerry</title>
+<style>@@CSS@@</style>
+</head>
+<body>
+<div class="container">
+
+  <nav class="tabs" id="tabBar"></nav>
+
+  <!-- ═══ 设备连接 ═══ -->
+  <section class="tab-panel" id="tab-device">
+  <div class="card">
+    <div class="input-group">
+      <label for="urlA">设备 A（接收端）</label>
+      <input type="text" id="urlA" placeholder="http://192.168.1.100:1234/DCIM/Pixez/">
+      <div class="input-badge" id="badge-urlA"></div>
+    </div>
+    <div class="input-group">
+      <label for="urlB">设备 B（来源端）</label>
+      <input type="text" id="urlB" placeholder="http://192.168.1.101:1234/DCIM/">
+      <div class="input-badge" id="badge-urlB"></div>
+    </div>
+    <div class="input-hint">支持 HTTP 目录列表、FTP 直连、本地磁盘路径，自动识别</div>
+
+    <div class="actions" style="margin-top:16px">
+      <button class="btn btn-primary" id="scanBtn">扫描比对</button>
+      <button class="btn btn-danger hidden" id="syncBtn" disabled>同步到设备A（0 个文件）</button>
+      <div class="dir-group" id="dirGroup">
+        <button class="dir-btn active" data-dir="ab">B → A</button>
+        <button class="dir-btn" data-dir="ba">A → B</button>
+      </div>
+      <label class="toggle-group">
+        <input type="checkbox" id="hashToggle">
+        哈希校验
+      </label>
+    </div>
+
+    <div id="statsBar" class="stats hidden"></div>
+
+    <div class="status" id="status">输入两台设备的 HTTP/FTP 链接，点击「扫描比对」开始</div>
+
+    <div id="progressWrap" class="progress">
+      <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div class="progress-text" id="progressText">处理中...</div>
+    </div>
+
+    <div id="resultSection" class="hidden">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px"><input type="checkbox" id="selectAll"></th>
+              <th style="width:40px">#</th>
+              <th style="width:56px">预览</th>
+              <th>文件名</th>
+              <th style="width:90px">大小</th>
+              <th id="hashTh" style="width:280px" class="hidden">SHA256</th>
+            </tr>
+          </thead>
+          <tbody id="fileList"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="emptyState" class="empty-state" style="margin:0">
+      <div>输入设备链接后点击「扫描比对」查看结果</div>
+    </div>
+  </div>
+  </section>
+
+  <!-- ═══ Pixiv 收藏查重 ═══ -->
+  <section class="tab-panel" id="tab-pixiv">
+  <div class="card">
+    <div class="card-title">Pixiv 收藏查重</div>
+    <div class="input-group">
+      <label for="pixivUid">
+        Pixiv UID
+        <span class="help-toggle" data-target="helpUid">?</span>
+      </label>
+      <input type="text" id="pixivUid" placeholder="12345678（个人主页地址栏末尾数字）">
+      <div id="helpUid" class="help-text hidden">
+        <strong>如何获取 Pixiv UID：</strong>
+        <ol>
+          <li>打开 <a href="https://www.pixiv.net" target="_blank">pixiv.net</a> 并登录</li>
+          <li>点击右上角头像进入个人主页</li>
+          <li>浏览器地址栏 <code>https://www.pixiv.net/users/</code><strong>12345678</strong> 末尾的数字即是 UID</li>
+        </ol>
+      </div>
+    </div>
+    <div class="input-group">
+      <label for="pixivPhpsessid">
+        PHPSESSID
+        <span class="help-toggle" data-target="helpPhpsessid">?</span>
+      </label>
+      <input type="password" id="pixivPhpsessid" placeholder="已保存的凭证已隐藏，留空则使用已保存凭证（清空请手动编辑 config.ini）">
+      <div id="helpPhpsessid" class="help-text hidden">
+        <strong>如何获取 PHPSESSID：</strong>
+        <ol>
+          <li>在浏览器打开 <a href="https://www.pixiv.net" target="_blank">pixiv.net</a> 并登录账号</li>
+          <li>按 <code>F12</code> 打开开发者工具</li>
+          <li>切换到 <code>Application</code> 标签 → 左侧 <code>Cookies</code> → <code>https://www.pixiv.net</code></li>
+          <li>找到 <code>PHPSESSID</code> 这一行，复制其值（一串字母数字）</li>
+        </ol>
+        <div style="margin-top:6px;color:var(--err);font-size:11px">⚠ PHPSESSID 相当于你的登录凭证，不会上传到任何第三方服务器</div>
+      </div>
+    </div>
+    <div class="input-group" style="margin-bottom:0">
+      <label for="pixivPath">本地文件夹路径</label>
+      <input type="text" id="pixivPath" placeholder="C:\Users\...\Pictures 或 ftp://192.168.1.100:21/">
+      <div class="input-badge" id="badge-pixivPath"></div>
+    </div>
+
+    <div class="input-group">
+      <label for="pixivLimit">扫描数量（0 = 全部）</label>
+      <input type="number" id="pixivLimit" min="0" step="1" placeholder="0">
+    </div>
+
+    <div class="actions" style="margin-top:16px;margin-bottom:12px">
+      <button class="btn btn-primary" id="pixivFetchBtn">拉取收藏</button>
+      <button class="btn btn-danger" id="pixivStopBtn" style="display:none" title="网络请求阶段停止最长等待当前请求超时（30s）；本地扫描阶段需等待当前扫描完成后生效">终止</button>
+      <span id="pixivStatus" class="pixiv-status">就绪</span>
+    </div>
+
+    <div id="pixivResult" class="hidden">
+      <div class="pixiv-stats">
+        <span>收藏总数: <strong id="pixivTotal">0</strong></span>
+        <span>缺失作品: <strong id="pixivMissing">0</strong></span>
+        <span>缺失分p总数: <strong id="pixivMissingPages">0</strong></span>
+      </div>
+      <div class="table-wrap" style="margin-top:12px">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px">#</th>
+              <th>范围</th>
+              <th style="width:60px">操作</th>
+              <th style="width:100px">ID</th>
+              <th style="width:110px">分p</th>
+            </tr>
+          </thead>
+          <tbody id="pixivFileList"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  </section>
+
+  <!-- ═══ 更多设置 ═══ -->
+  <section class="tab-panel" id="tab-settings">
+    <div class="card">
+      <div class="card-title">界面设置</div>
+      <div class="settings-grid">
+      <div class="input-group">
+        <label for="settingTheme">界面主题</label>
+        <select id="settingTheme">
+          <option value="0">深色（默认）</option>
+          <option value="1">浅色</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label for="settingThumbSize">缩略图尺寸</label>
+        <select id="settingThumbSize">
+          <option value="16">特小（16px）</option>
+          <option value="24">小（24px）</option>
+          <option value="48">标准（48px）</option>
+          <option value="64">大（64px）</option>
+          <option value="96">特大（96px）</option>
+        </select>
+      </div>
+      <div class="input-group">
+        <label for="settingPreviewDelay">预览悬浮延迟</label>
+        <input type="number" id="settingPreviewDelay" min="100" max="2000" step="50"> ms
+      </div>
+      <div class="input-group">
+        <label for="settingPixivInterval">Pixiv 请求间隔（防限流）</label>
+        <input type="number" id="settingPixivInterval" min="0.1" max="10" step="0.1"> s
+      </div>
+      <div class="input-group">
+        <label for="settingMaxRows">结果表行数上限</label>
+        <input type="number" id="settingMaxRows" min="10" max="5000" step="10">
+        <div class="input-hint">设备同步扫描结果与 Pixiv 查重结果两张结果表的行数上限，与日志、缩略图无关</div>
+      </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Pixiv 查重黑名单（illust ID）</div>
+      <div class="input-group">
+        <input type="text" id="blacklistInput" placeholder="作品 ID 或作品链接，如 https://www.pixiv.net/artworks/123456">
+        <div class="input-badge" id="blacklistMsg"></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="blacklistAddBtn">添加</button>
+        <button class="btn btn-danger" id="blacklistClearBtn">清空</button>
+      </div>
+      <div id="blacklistList"></div>
+    </div>
+  </section>
+
+  <!-- ═══ 日志 ═══ -->
+  <section class="tab-panel" id="tab-logs">
+    <div class="card">
+      <div class="card-title">命令行日志</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <label class="toggle-group"><input type="checkbox" id="logAutoScroll" checked> 自动滚动</label>
+        <button class="btn" id="logPauseBtn">暂停</button>
+        <button class="btn btn-danger" id="logClearBtn">清空</button>
+      </div>
+      <div id="logList" class="log-box"></div>
+    </div>
+  </section>
+  </div>
+
+  <!-- ═══ 预览面板（在所有标签页之外，避免 position:fixed 嵌套问题）═══ -->
+  <div id="previewPanel" class="preview-panel">
+    <img id="previewImg" src="" alt="preview">
+    <div class="preview-name" id="previewName"></div>
+  </div>
+</div>
+
+<script>@@JS@@</script>
+</body>
+</html>

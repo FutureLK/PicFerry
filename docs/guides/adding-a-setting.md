@@ -16,7 +16,7 @@ _CONFIG_KEYS (server.py:50)  ← 注册默认值/范围/类型
    ├─→ _handle_config (GET)      自动回显
    └─→ _handle_config_save (POST) 自动保存
    │
-   └─→ 前端表单（HTML 常量，server.py:185+）  ← 需要手改
+   └─→ 前端表单（static/index.html + static/app.js）  ← 需要手改
    └─→ docs/settings.md           ← 需要手改
 ```
 
@@ -38,7 +38,7 @@ _CONFIG_KEYS (server.py:50)  ← 注册默认值/范围/类型
 
 **步骤 2：验证自动覆盖。** `load_config`(73) 会遍历 `_CONFIG_KEYS` 读取并解析；`save_config`(96) 会遍历注册表保存（bool 键强制转 `0/1`）。`_handle_config`（GET `/api/config`）与 `_handle_config_save`（POST `/api/config/save`）同样自动覆盖。**无需改这三处。**
 
-**步骤 3：前端表单。** 在 `HTML` 常量（`server.py:185+`）找到设置表单（"更多设置"标签页），添加输入框，并在 JS 中把该键纳入：
+**步骤 3：前端表单。** 在 `static/index.html` 找到设置表单（"更多设置"标签页）添加输入框，并在 `static/app.js` 中把该键纳入：
 - 读取配置后填充（`/api/config` 返回中自动带新键）
 - 失焦时随 `POST /api/config/save` 提交
 
@@ -86,7 +86,7 @@ _CONFIG_KEYS (server.py:50)   ← register default/range/type
    ├─→ save_config (96)          auto save
    ├─→ _handle_config (GET)      auto echo
    └─→ _handle_config_save (POST) auto save
-   └─→ frontend form (HTML constant, server.py:185+)  ← manual
+   └─→ frontend form (static/index.html + static/app.js)  ← manual
    └─→ docs/settings.md          ← manual
 ```
 
@@ -99,7 +99,7 @@ _CONFIG_KEYS (server.py:50)   ← register default/range/type
 
 1. Register in `_CONFIG_KEYS` (`server.py:50`): `'sampleSize': (64, 8, 256, 'int'),` — format `key: (default, lo, hi, type)`, `type ∈ {'int','float','bool'}`.
 2. Auto-coverage: `load_config`(73) / `save_config`(96) / `_handle_config` / `_handle_config_save` all iterate the registry. No manual edits there.
-3. Frontend: add an input in the settings form inside the `HTML` constant (`server.py:185+`); include the key in config fill (`/api/config`) and submit (`POST /api/config/save`).
+3. Frontend: add an input in the settings form in `static/index.html`; include the key in config fill (`/api/config`) and submit (`POST /api/config/save`) — JS side in `static/app.js`.
 4. Docs: add a row to `docs/settings.md` summary table + a semantic/safety note (follow `allowLan` style for sensitive/security-impact keys).
 
 ## 3. Free-form string key (manual path)
