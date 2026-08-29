@@ -1,4 +1,4 @@
-# config_store.py — 从 server.py 原样移出的配置存储（Config 区段），见 server.py 引用处
+"""配置读写：config.ini 注册表驱动，原子写 + 损坏拒绝覆盖 + EXE 目录降级。"""
 
 import os
 import sys

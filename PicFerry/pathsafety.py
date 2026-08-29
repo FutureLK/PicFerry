@@ -1,4 +1,4 @@
-# pathsafety.py — 从 server.py 原样移出的本地路径安全函数（路径净化与三层防线校验），见 server.py 引用处
+"""本地路径安全：参数净化 → 基座校验 → realpath 越界检查三层防线。"""
 
 import os
 import re

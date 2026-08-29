@@ -29,8 +29,6 @@ PicFerry/config.ini
 PicFerry/blacklist.csv
 
 # AI Agent
-.omo/
-.codegraph/
 .zcode/
 
 # playwright mcp artifacts

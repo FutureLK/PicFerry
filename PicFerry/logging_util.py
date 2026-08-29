@@ -1,4 +1,4 @@
-# logging_util.py — 从 server.py 原样移出的日志工具（Console logging 区段），见 server.py 引用处
+"""日志工具：stderr 彩色输出 + 内存环形缓冲（网页日志轮询的数据源）。"""
 
 import collections
 import itertools

@@ -1,4 +1,4 @@
-# PicFerry 机械拆分模块: 本文件代码由 server.py 原样移入（HTTP 层: SyncHandler 全部路由处理 + strip_remote_locked_keys 声明权控制）, 纯移动, 零逻辑改动。
+"""PicFerry HTTP 路由层：SyncHandler 全部 /api/* 路由处理 + strip_remote_locked_keys 声明权剥除。"""
 import hashlib
 import http.server
 import json
@@ -11,6 +11,7 @@ import logging_util
 from logging_util import LOG_BUFFER, LOG_LOCK, console_log
 from config_store import load_config, save_config
 
+# 导入期计时(debug 诊断): 与 server.py 导入区同一机制, 数据常驻 logging_util.IMPORT_TIMING
 _t_imp = time.perf_counter()
 from pathsafety import is_local_path, strip_file_prefix, _safe_error_text, _sanitize_rel_path, _check_local_base, _check_realpath_within, _assert_declared_scan_base
 logging_util.IMPORT_TIMING['pathsafety'] = round((time.perf_counter() - _t_imp) * 1000)
@@ -62,50 +63,6 @@ def _emit_import_timing():
         total += ms
     console_log('DEBUG', f'模块导入合计: {total} ms')
 
-
-# ─── Pixiv API ────────────────────────────────────────────────────────────
-#
-# 接口文档（供后期维护参考）
-#
-# [POST] /api/pixiv/bookmarks
-#   描述: 启动 Pixiv 收藏扫描（后台 Job, 立即返回; 进度经 /api/pixiv/job 轮询）
-#   请求头: Content-Type: application/json
-#   请求体: {
-#     "uid":       string  — Pixiv 用户 ID（必填）
-#     "phpsessid": string  — 浏览器 Cookie 中的 PHPSESSID（必填）
-#     "path":      string  — 本地文件夹路径或 FTP/HTTP 链接（必填）
-#     "limit":     int     — 扫描数量上限, 0=全部（可选, 默认取 config pixivLimit）
-#   }
-#   成功响应: { "ok": true, "status": "fetching" }   （单槽: 已有任务运行时返回 {"error":"已有任务在运行"}）
-#   错误响应: { "error": string }
-#
-# [POST] /api/pixiv/bookmarks/stop
-#   描述: 请求终止当前扫描（网络请求阶段最长等当前请求超时 30s; 本地扫描阶段等扫描完成后生效）
-#   成功响应: { "ok": true }
-#
-# [GET] /api/pixiv/job
-#   描述: 轮询 Job 状态（不含 result 数组, 轻量）
-#   成功响应: { "status": "idle|fetching|scanning|matching|done|stopped|error",
-#               "progress": {"phase","fetched","total"}, "error": string|null,
-#               "summary": {"total_bookmarks","local_count","missing_works","missing_pages"}|null }
-#
-# [GET] /api/pixiv/job/result
-#   描述: 取终态结果（仅 done 时有数据）
-#   成功响应: { "matched": [{illust_id, pageCount, saved_pages, missing_pages, range}, ...] }
-#
-# 查重语义: 本地文件名 ^(\d+)_p(\d+) 提取 (illust_id, page);
-#   page < 书签 pageCount 判定该分p已收藏（0-indexed）; 无 _pN 后缀按 page 0。
-# 黑名单: 拉取循环内剔除 blacklist.csv 中的作品 ID, 不计入 limit 预算。
-# 请求间隔: config pixivInterval (秒, 默认 0.8) 防限流。
-#
-# 如需新增 Pixiv 功能（如拉取指定画师作品、关键词搜索），
-# 可在此文件新增函数并在 SyncHandler 中注册新路由:
-#   def _handle_pixiv_xxx(self):    # handler
-#   elif parsed.path == '/api/pixiv/xxx': self._handle_pixiv_xxx()   # do_POST / do_GET
-#
-# 【扩展新功能三步】1) 后端: 新增 handler 方法 + 在 do_GET/do_POST 注册路由
-#   2) 前端: 在 static/index.html 加控件/面板（或按 TABS 注册表新增标签页）
-#   3) 验证: 参考 .omo/evidence/pixiv-web-upgrade/ 各 task 的 QA 模式写 curl/Playwright 验收
 
 class SyncHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'

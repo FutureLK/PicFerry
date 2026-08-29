@@ -33,7 +33,7 @@ This document is the project constitution for AI agents. Read and follow it befo
 │   │   └── blacklist.csv     ← Pixiv 黑名单（运行时生成）
 │   └── dist/                 ← PyInstaller 产物（不入库）
 ├── archived/                 ← 历史周期归档，规范见 archived/archived.md（默认不读，§3.2 红线）
-└── .omo/ .codegraph/         ← AI 工具目录，禁止修改
+└── .zcode/                   ← ZCode 会话产物（plans/ 计划书；gitignored，周期归档后清空）
 ```
 
 ## 3. 要求限制（红线，按优先级）

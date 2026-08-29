@@ -1,4 +1,4 @@
-# datasources.py — 从 server.py 原样移出的数据源访问函数（HTTP/FTP/本地 目录列举、下载、上传与远程文件读取），见 server.py 引用处
+"""数据源读取：HTTP / FTP / 本地目录的列举、下载与上传。"""
 
 import io
 import os

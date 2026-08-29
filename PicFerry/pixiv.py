@@ -1,4 +1,6 @@
-# PicFerry 机械拆分模块: 本文件代码由 server.py 原样移入（Pixiv 查重: 黑名单/收藏拉取/后台 Job 引擎）, 纯移动, 零逻辑改动。
+"""Pixiv 收藏查重：收藏拉取、分p 匹配、单槽后台 Job 引擎、黑名单读写。"""
+# 查重语义: 本地文件名 ^(\d+)_p(\d+) 提取 (illust_id, page); page < 书签 pageCount 判定该分p已收藏
+#   (0-indexed); 无 _pN 后缀按 page 0。黑名单作品在拉取循环内剔除, 不计入 limit 预算; 间隔取 config pixivInterval。
 import json
 import os
 import re
